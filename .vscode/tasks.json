@@ -1,0 +1,92 @@
+{
+  "version": "2.0.0",
+  "taskSidebar": {
+    "layout": "both",
+    "statusbarTheme": "dark"
+  },
+  "tasks": [
+    {
+      "label": "Validate: Extension syntax",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "--check",
+        "src/extension.js"
+      ],
+      "problemMatcher": [],
+      "options": {
+        "taskSidebar": {
+          "icon": "$(check)",
+          "color": "colors.success",
+          "groupIcon": "$(beaker)",
+          "groupColor": "colors.success"
+        }
+      }
+    },
+    {
+      "label": "Validate: Manifest JSON",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "-e",
+        "JSON.parse(require('fs').readFileSync('package.json', 'utf8'));"
+      ],
+      "problemMatcher": [],
+      "options": {
+        "taskSidebar": {
+          "icon": "$(json)",
+          "color": "colors.blue"
+        }
+      }
+    },
+    {
+      "label": "Package: Build VSIX",
+      "type": "shell",
+      "command": "vsce package --no-dependencies",
+      "problemMatcher": [],
+      "dependsOn": [
+        "Validate: Extension syntax",
+        "Validate: Manifest JSON"
+      ],
+      "options": {
+        "taskSidebar": {
+          "icon": "$(package)",
+          "color": "colors.yellow",
+          "groupIcon": "$(package)",
+          "groupColor": "colors.yellow"
+        }
+      }
+    },
+    {
+      "label": "Install: Local VSIX",
+      "type": "shell",
+      "command": "code --install-extension git-tree-0.0.1.vsix --force",
+      "problemMatcher": [],
+      "dependsOn": [
+        "Package: Build VSIX"
+      ],
+      "options": {
+        "taskSidebar": {
+          "icon": "$(desktop-download)",
+          "color": "colors.blue",
+          "groupIcon": "$(desktop-download)",
+          "groupColor": "colors.blue"
+        }
+      }
+    },
+    {
+      "label": "Publish: VS Code Marketplace",
+      "type": "shell",
+      "command": "vsce publish --no-dependencies",
+      "problemMatcher": [],
+      "options": {
+        "taskSidebar": {
+          "icon": "$(cloud-upload)",
+          "color": "colors.orange",
+          "groupIcon": "$(cloud-upload)",
+          "groupColor": "colors.orange"
+        }
+      }
+    }
+  ]
+}
