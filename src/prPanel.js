@@ -237,10 +237,7 @@ async function azureDetails(pr, token) {
     json(`${base}/threads?api-version=7.1`, headers),
     json(`${base}/workitems?api-version=7.1`, headers).catch(() => ({ value: [] }))
   ]);
-  const latest = (iterations.value || []).sort((a, b) => (b.id || 0) - (a.id || 0))[0];
-  const changes = latest
-    ? await json(`${base}/iterations/${latest.id}/changes?api-version=7.1`, headers).catch(() => ({ changeEntries: [] }))
-    : { changeEntries: [] };
+  const changes = await azurePullRequestChanges(base, headers, iterations.value || []);
   const workItems = await azureWorkItems(pr, token, workItemRefs.value || []);
   let comments = (threads.value || []).flatMap((thread) => {
     const ctx = thread.threadContext || {};
@@ -264,7 +261,7 @@ async function azureDetails(pr, token) {
     body: detail.description || pr.body || '',
     state: detail.status || pr.state,
     author: detail.createdBy?.displayName || pr.author,
-    files: (changes.changeEntries || []).map((entry) => ({
+    files: azureChangeEntries(changes).map((entry) => ({
       path: entry.item?.path || entry.changeTrackingId || '(unknown)',
       status: entry.changeType || 'modified',
       additions: null,
@@ -276,6 +273,19 @@ async function azureDetails(pr, token) {
     commentsTotal: comments.length,
     tasks: mergeTasks(extractTasks({ ...pr, body: [detail.description, ...comments.map((c) => c.body)].filter(Boolean).join('\n') }), workItems)
   };
+}
+
+async function azurePullRequestChanges(base, headers, iterations) {
+  const sorted = [...iterations].sort((a, b) => (b.id || 0) - (a.id || 0));
+  for (const iteration of sorted) {
+    const changes = await json(`${base}/iterations/${iteration.id}/changes?api-version=7.1`, headers).catch(() => null);
+    if (azureChangeEntries(changes).length) return changes;
+  }
+  return { changeEntries: [] };
+}
+
+function azureChangeEntries(changes) {
+  return changes?.changeEntries || changes?.changes || changes?.value || [];
 }
 
 async function azureWorkItems(pr, token, refs) {

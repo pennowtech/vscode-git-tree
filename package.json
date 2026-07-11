@@ -40,6 +40,9 @@
   ],
   "main": "./src/extension.js",
   "scripts": {
+    "test": "node test/run-tests.js",
+    "test:syntax": "node test/run-tests.js --syntax-only",
+    "test:unit": "node test/run-tests.js --unit-only",
     "package": "vsce package",
     "publish": "vsce publish"
   },
@@ -77,8 +80,11 @@
       { "command": "gitTree.stageChange", "title": "Stage Change", "icon": "$(add)" },
       { "command": "gitTree.unstageChange", "title": "Unstage Change", "icon": "$(remove)" },
       { "command": "gitTree.discardChange", "title": "Discard Changes…", "icon": "$(discard)" },
-      { "command": "gitTree.openChange", "title": "Open Changes" }
-      ,{ "command": "gitTree.scmCommit", "title": "Commit", "icon": "$(check)" }
+      { "command": "gitTree.openChange", "title": "Open Changes" },
+      { "command": "gitTree.openChangeFile", "title": "Open File", "icon": "$(go-to-file)" },
+      { "command": "gitTree.revealChangeInExplorer", "title": "Reveal in Explorer", "icon": "$(folder-opened)" },
+      { "command": "gitTree.copyChangePath", "title": "Copy Path", "icon": "$(copy)" },
+      { "command": "gitTree.copyChangeRelativePath", "title": "Copy Relative Path", "icon": "$(copy)" }
       ,{ "command": "gitTree.setCommitMessage", "title": "Set Commit Message…", "icon": "$(edit)" }
       ,{ "command": "gitTree.showCommit", "title": "Show Commit in Graph" }
       ,{ "command": "gitTree.amendCommit", "title": "Amend Last Commit", "icon": "$(git-commit)" }
@@ -187,6 +193,10 @@
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "inline@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "1_actions@1" },
         { "command": "gitTree.discardChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "2_danger@1" },
+        { "command": "gitTree.openChangeFile", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged)/", "group": "3_file@1" },
+        { "command": "gitTree.revealChangeInExplorer", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "3_file@2" },
+        { "command": "gitTree.copyChangePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@1" },
+        { "command": "gitTree.copyChangeRelativePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@2" },
         { "command": "gitTree.stageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.working", "group": "1_actions@1" },
         { "command": "gitTree.unstageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.staged", "group": "1_actions@1" },
         { "command": "gitTree.checkoutBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "inline@1" },
@@ -216,17 +226,6 @@
         ,{ "command": "gitTree.openSubmodule", "when": "view == gitTree.submodules && viewItem == gitTree.submodule", "group": "inline@1" }
         ,{ "command": "gitTree.openPullRequestDetails", "when": "view == gitTree.pullRequests && viewItem == gitTree.pullRequest", "group": "inline@1" }
         ,{ "command": "gitTree.openPullRequestWeb", "when": "view == gitTree.pullRequests && viewItem == gitTree.pullRequest", "group": "1_actions@1" }
-      ],
-      "scm/title": [
-        { "command": "gitTree.scmCommit", "when": "scmProvider == gitTree", "group": "navigation@1" },
-        { "command": "gitTree.stageAll", "when": "scmProvider == gitTree", "group": "navigation@2" },
-        { "command": "gitTree.unstageAll", "when": "scmProvider == gitTree", "group": "navigation@3" },
-        { "command": "gitTree.refresh", "when": "scmProvider == gitTree", "group": "navigation@4" }
-      ],
-      "scm/resourceState/context": [
-        { "command": "gitTree.stageChange", "when": "scmProvider == gitTree && scmResourceState == gitTree.changeWorking", "group": "inline@1" },
-        { "command": "gitTree.unstageChange", "when": "scmProvider == gitTree && scmResourceState == gitTree.changeStaged", "group": "inline@1" },
-        { "command": "gitTree.discardChange", "when": "scmProvider == gitTree && scmResourceState == gitTree.changeWorking", "group": "2_danger@1" }
       ],
       "editor/title/context": [
         { "command": "gitTree.fileHistory", "group": "1_gittree@1" }

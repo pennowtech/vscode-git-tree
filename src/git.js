@@ -282,6 +282,30 @@ class Git {
     });
   }
 
+  async getCommitStats(sha) {
+    const statusOut = await this.exec(['diff-tree', '--root', '--no-commit-id', '--name-status', '-r', '-M', sha]).catch(() => '');
+    const numstatOut = await this.exec(['diff-tree', '--root', '--no-commit-id', '--numstat', '-r', '-M', sha]).catch(() => '');
+    const statusCounts = { added: 0, modified: 0, deleted: 0, renamed: 0, files: 0 };
+    for (const line of statusOut.split('\n')) {
+      if (!line.trim()) continue;
+      statusCounts.files += 1;
+      const status = line[0];
+      if (status === 'A') statusCounts.added += 1;
+      else if (status === 'D') statusCounts.deleted += 1;
+      else if (status === 'R') statusCounts.renamed += 1;
+      else statusCounts.modified += 1;
+    }
+    let additions = 0;
+    let deletions = 0;
+    for (const line of numstatOut.split('\n')) {
+      if (!line.trim()) continue;
+      const [add, del] = line.split(/\s+/);
+      additions += Number(add) || 0;
+      deletions += Number(del) || 0;
+    }
+    return { ...statusCounts, additions, deletions };
+  }
+
   async getWorktrees() {
     const out = await this.exec(['worktree', 'list', '--porcelain']).catch(() => '');
     return out.trim().split(/\n\n+/).filter(Boolean).map((block) => {
@@ -519,4 +543,4 @@ function zipFileStats(nameStatusOut, numstatOut) {
   return files;
 }
 
-module.exports = { Git, GitError };
+module.exports = { Git, GitError, _test: { parseRefs, zipFileStats } };

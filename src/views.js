@@ -49,18 +49,20 @@ class BranchesProvider extends BaseProvider {
     }
     if (element.branch) {
       const commits = await git.getBranchLog(element.branch.name, 25, element.branch.upstream);
-      return commits.filter((c) => !this.authorFilter || c.author.toLowerCase().includes(this.authorFilter.toLowerCase())).map((c) => {
+      const filtered = commits.filter((c) => !this.authorFilter || c.author.toLowerCase().includes(this.authorFilter.toLowerCase()));
+      return Promise.all(filtered.map(async (c) => {
+        const stats = await git.getCommitStats(c.sha).catch(() => null);
         const item = new vscode.TreeItem(c.subject || '(no message)');
         const publication = c.published === true ? 'pushed' : c.published === false ? 'unpushed' : 'local';
         const signing = c.signature === 'G' ? 'signed' : c.signature === 'B' ? 'bad signature' : '';
         item.description = [c.sha.slice(0, 7), publication, signing, timeAgo(c.time)].filter(Boolean).join(' · ');
-        item.tooltip = `${c.author} · ${c.sha}`;
+        item.tooltip = commitTooltip(c, publication, signing, stats);
         item.iconPath = new vscode.ThemeIcon(c.signature === 'G' ? 'verified-filled' : 'git-commit');
         item.contextValue = 'gitTree.commit';
-        item.commit = c;
+        item.commit = { ...c, stats };
         item.command = { command: 'gitTree.showCommit', title: 'Show Commit', arguments: [item] };
         return item;
-      });
+      }));
     }
     const branches = await git.getBranches();
     const wantRemote = element.remote ?? element.id === 'group:remote';
@@ -101,10 +103,7 @@ function branchItem(b, trimPrefix = false) {
         ]
           .filter(Boolean)
           .join(' · ');
-        item.tooltip = new vscode.MarkdownString(
-          `**${b.name}** \`${b.sha}\`\n\n${b.subject || ''}\n\n` +
-            (b.upstream ? `Tracks \`${b.upstream}\` ${b.track ? `(${b.track})` : ''}` : '_no upstream_')
-        );
+        item.tooltip = branchTooltip(b);
         const diverged = /ahead\s+\d+.*behind\s+\d+|behind\s+\d+.*ahead\s+\d+/i.test(b.track);
         const behind = /behind\s+\d+/i.test(b.track);
         const ahead = /ahead\s+\d+/i.test(b.track);
@@ -112,6 +111,51 @@ function branchItem(b, trimPrefix = false) {
         item.iconPath = new vscode.ThemeIcon(b.current ? 'circle-filled' : 'git-branch', color ? new vscode.ThemeColor(color) : undefined);
         item.branch = b;
         return item;
+}
+
+function commitTooltip(commit, publication, signing, stats) {
+  const tooltip = new vscode.MarkdownString(undefined, true);
+  tooltip.supportThemeIcons = true;
+  const statLine = stats
+    ? [
+        `$(${codicon('diff-added')}) <span style="color:var(--vscode-gitDecoration-addedResourceForeground)">${stats.added} added</span>`,
+        `$(${codicon('diff-modified')}) <span style="color:var(--vscode-gitDecoration-modifiedResourceForeground)">${stats.modified} modified</span>`,
+        `$(${codicon('diff-removed')}) <span style="color:var(--vscode-gitDecoration-deletedResourceForeground)">${stats.deleted} deleted</span>`,
+        stats.renamed ? `$(${codicon('replace')}) <span style="color:var(--vscode-gitDecoration-renamedResourceForeground)">${stats.renamed} renamed</span>` : ''
+      ].filter(Boolean).join(' &nbsp; ')
+    : '';
+  tooltip.value = [
+    `**${escapeMarkdown(commit.subject || '(no message)')}**`,
+    '',
+    `Committed by **${escapeMarkdown(commit.author || 'unknown')}** · ${new Date(commit.time).toLocaleString()} · ${timeAgo(commit.time)}`,
+    [publication, signing].filter(Boolean).length ? [publication, signing].filter(Boolean).join(' · ') : '',
+    stats ? `Files changed: **${stats.files}**` : '',
+    statLine || ''
+  ].filter(Boolean).join('\n\n');
+  return tooltip;
+}
+
+function branchTooltip(branch) {
+  const tooltip = new vscode.MarkdownString(undefined, true);
+  tooltip.supportThemeIcons = true;
+  tooltip.value = [
+    `**${escapeMarkdown(branch.name)}**`,
+    '',
+    `Latest commit: \`${branch.sha}\``,
+    branch.subject ? escapeMarkdown(branch.subject) : '',
+    '',
+    branch.current ? '$(circle-filled) Current branch' : '',
+    branch.remote ? '$(cloud) Remote branch' : '$(repo) Local branch',
+    branch.upstream ? `Tracks \`${branch.upstream}\`${branch.track ? ` (${escapeMarkdown(branch.track)})` : ''}` : '_No upstream_',
+    branch.time ? `Updated ${timeAgo(branch.time)} · ${new Date(branch.time).toLocaleString()}` : ''
+  ].filter(Boolean).join('\n\n');
+  return tooltip;
+}
+
+function codicon(name) { return name; }
+
+function escapeMarkdown(value) {
+  return String(value || '').replace(/[\\`*_{}[\]()#+\-.!|>]/g, '\\$&');
 }
 
 class StashesProvider extends BaseProvider {
@@ -309,16 +353,16 @@ class PullRequestsProvider extends BaseProvider {
     const info = configuredAzure || parseHostedRemote(remote);
     if (!info) return [messageItem('Origin is not hosted on GitHub, GitLab, or Azure DevOps.')];
     try {
+      const head = await git.getHead();
       if (info.provider === 'azure') {
-        const head = await git.getHead();
         const requests = await azurePullRequests(info, await this.getAzureDevOpsToken(), head.branch);
-        if (!requests.length) return [messageItem(head.branch ? `No active Azure DevOps pull requests for ${head.branch}.` : 'No active Azure DevOps pull requests.')];
+        if (!requests.length) return [messageItem('No active Azure DevOps pull requests created by the current user.')];
         return requests.map(pullRequestItem);
       }
       const requests = info.provider === 'github'
-        ? await githubPullRequests(info)
-        : await gitlabMergeRequests(info, await this.getGitLabToken());
-      if (!requests.length) return [messageItem('No open pull/merge requests.')];
+        ? await githubPullRequests(info, head.branch)
+        : await gitlabMergeRequests(info, await this.getGitLabToken(), head.branch);
+      if (!requests.length) return [messageItem('No open pull/merge requests created by the current user.')];
       return requests.map(pullRequestItem);
     } catch (error) {
       return [messageItem(`Unable to load requests: ${error.message}`)];
@@ -327,19 +371,24 @@ class PullRequestsProvider extends BaseProvider {
 }
 
 function pullRequestItem(pr) {
-  const title = pr.number ? `#${pr.number} ${pr.title}` : pr.title;
+  const title = pr.number ? `${pr.currentBranch ? '● ' : ''}#${pr.number} ${pr.title}` : pr.title;
   const comments = pr.commentsTotal != null ? ` · ${pr.commentsActive}/${pr.commentsTotal} comments` : '';
+  const current = pr.currentBranch ? ' · current branch' : '';
   const item = new vscode.TreeItem(title);
-  item.description = `${pr.author} · ${pr.source} -> ${pr.target}${comments}`;
+  item.description = `${pr.author} · ${pr.source} -> ${pr.target}${comments}${current}`;
   item.tooltip = new vscode.MarkdownString([
     `**${pr.title}**`,
     '',
     `${pr.author} · ${pr.source} -> ${pr.target}`,
+    pr.currentBranch ? 'Matches the current working branch.' : '',
     pr.commentsTotal != null ? `${pr.commentsActive}/${pr.commentsTotal} active/total comments` : '',
     '',
     pr.url
   ].filter(Boolean).join('\n\n'));
-  item.iconPath = new vscode.ThemeIcon(pr.draft ? 'git-pull-request-draft' : 'git-pull-request');
+  item.iconPath = new vscode.ThemeIcon(
+    pr.draft ? 'git-pull-request-draft' : 'git-pull-request',
+    pr.currentBranch ? new vscode.ThemeColor('charts.green') : undefined
+  );
   item.contextValue = 'gitTree.pullRequest';
   item.pullRequest = pr;
   item.command = { command: 'gitTree.openPullRequestDetails', title: 'Open Pull Request Details', arguments: [item] };
@@ -434,12 +483,12 @@ function normalizeAzureBaseUrl(endpoint, org) {
 async function azurePullRequests(info, token, branch) {
   if (!token) throw new Error('Azure DevOps token is not set. Run "Set Azure DevOps Token Securely..." first.');
   const headers = azureHeaders(token);
-  const source = branch ? `&searchCriteria.sourceRefName=${encodeURIComponent(`refs/heads/${branch}`)}` : '';
-  const url = `${info.baseUrl}/${encodeURIComponent(info.project)}/_apis/git/repositories/${encodeURIComponent(info.repo)}/pullrequests?searchCriteria.status=active${source}&api-version=7.1`;
+  const currentUser = await azureCurrentUser(info, headers);
+  const url = `${info.baseUrl}/${encodeURIComponent(info.project)}/_apis/git/repositories/${encodeURIComponent(info.repo)}/pullrequests?searchCriteria.status=active&api-version=7.1`;
   const response = await fetch(url, { headers });
   if (!response.ok) throw new Error(`Azure DevOps returned ${response.status}`);
   const data = await response.json();
-  return (data.value || []).map((pr) => ({
+  return (data.value || []).filter((pr) => isAzureCurrentUserPr(pr, currentUser)).map((pr) => ({
     provider: 'azure',
     org: info.org,
     project: info.project,
@@ -450,6 +499,7 @@ async function azurePullRequests(info, token, branch) {
     author: pr.createdBy?.displayName || pr.createdBy?.uniqueName || 'unknown',
     source: String(pr.sourceRefName || '').replace(/^refs\/heads\//, ''),
     target: String(pr.targetRefName || '').replace(/^refs\/heads\//, ''),
+    currentBranch: branchMatches(pr.sourceRefName, branch),
     draft: !!pr.isDraft,
     url: `${info.baseUrl}/${info.project}/_git/${info.repo}/pullrequest/${pr.pullRequestId}`,
     body: pr.description || '',
@@ -459,6 +509,23 @@ async function azurePullRequests(info, token, branch) {
   }));
 }
 
+async function azureCurrentUser(info, headers) {
+  const data = await fetch(`${info.baseUrl}/_apis/connectionData?api-version=7.1-preview.1`, { headers })
+    .then((response) => response.ok ? response.json() : null)
+    .catch(() => null);
+  return data?.authenticatedUser || null;
+}
+
+function isAzureCurrentUserPr(pr, user) {
+  if (!user) return true;
+  const createdBy = pr.createdBy || {};
+  return [createdBy.id, createdBy.uniqueName, createdBy.displayName]
+    .filter(Boolean)
+    .some((value) => [user.id, user.uniqueName, user.providerDisplayName, user.displayName]
+      .filter(Boolean)
+      .some((candidate) => String(candidate).toLowerCase() === String(value).toLowerCase()));
+}
+
 function azureHeaders(token) {
   return {
     Accept: 'application/json',
@@ -466,24 +533,41 @@ function azureHeaders(token) {
   };
 }
 
-async function githubPullRequests(info) {
+async function githubPullRequests(info, branch) {
   const session = await vscode.authentication.getSession('github', ['repo'], { createIfNone: false });
   const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'GitTree-VSCode' };
   if (session) headers.Authorization = `Bearer ${session.accessToken}`;
-  const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/pulls?state=open&per_page=50`, { headers });
+  const user = session?.account?.label || session?.account?.id || '';
+  const url = `https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/pulls?state=open&per_page=100`;
+  let response = await fetch(url, { headers });
+  if (response.status === 404 && headers.Authorization) {
+    const fallbackHeaders = { Accept: headers.Accept, 'User-Agent': headers['User-Agent'] };
+    response = await fetch(url, { headers: fallbackHeaders });
+  }
   if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
   return (await response.json()).map((pr) => {
     const total = Number(pr.comments || 0) + Number(pr.review_comments || 0);
-    return { provider: 'github', owner: info.owner, repo: info.repo, number: pr.number, title: pr.title, author: pr.user.login, source: pr.head.ref, target: pr.base.ref, draft: pr.draft, url: pr.html_url, body: pr.body || '', state: pr.state, commentsActive: total, commentsTotal: total };
-  });
+    return { provider: 'github', owner: info.owner, repo: info.repo, number: pr.number, title: pr.title, author: pr.user.login, source: pr.head.ref, target: pr.base.ref, currentBranch: branchMatches(pr.head.ref, branch), draft: pr.draft, url: pr.html_url, body: pr.body || '', state: pr.state, commentsActive: total, commentsTotal: total };
+  }).filter((pr) => !user || String(pr.author).toLowerCase() === String(user).toLowerCase());
 }
 
-async function gitlabMergeRequests(info, token) {
+async function gitlabMergeRequests(info, token, branch) {
   const headers = token ? { 'PRIVATE-TOKEN': token } : {};
+  const user = token
+    ? await fetch('https://gitlab.com/api/v4/user', { headers }).then((response) => response.ok ? response.json() : null).catch(() => null)
+    : null;
   const project = encodeURIComponent(`${info.owner}/${info.repo}`);
-  const response = await fetch(`https://gitlab.com/api/v4/projects/${project}/merge_requests?state=opened&per_page=50`, { headers });
+  const response = await fetch(`https://gitlab.com/api/v4/projects/${project}/merge_requests?state=opened&per_page=100`, { headers });
   if (!response.ok) throw new Error(`GitLab returned ${response.status}`);
-  return (await response.json()).map((pr) => ({ provider: 'gitlab', owner: info.owner, repo: info.repo, project: `${info.owner}/${info.repo}`, number: pr.iid, title: pr.title, author: pr.author.username, source: pr.source_branch, target: pr.target_branch, draft: pr.draft, url: pr.web_url, body: pr.description || '', state: pr.state, commentsActive: pr.user_notes_count, commentsTotal: pr.user_notes_count }));
+  return (await response.json())
+    .map((pr) => ({ provider: 'gitlab', owner: info.owner, repo: info.repo, project: `${info.owner}/${info.repo}`, number: pr.iid, title: pr.title, author: pr.author.username, source: pr.source_branch, target: pr.target_branch, currentBranch: branchMatches(pr.source_branch, branch), draft: pr.draft, url: pr.web_url, body: pr.description || '', state: pr.state, commentsActive: pr.user_notes_count, commentsTotal: pr.user_notes_count }))
+    .filter((pr) => !user || String(pr.author).toLowerCase() === String(user.username).toLowerCase());
+}
+
+function branchMatches(ref, branch) {
+  const cleanRef = String(ref || '').replace(/^refs\/heads\//, '').replace(/^origin\//, '');
+  const cleanBranch = String(branch || '').replace(/^refs\/heads\//, '').replace(/^origin\//, '');
+  return Boolean(cleanRef && cleanBranch && cleanRef === cleanBranch);
 }
 
 function changeGroup(label, id, files, staged) {

@@ -18,8 +18,6 @@ let statusBarItem;
 let gitWatcher;
 let providers = {};
 let extensionContext;
-let scm;
-let scmRoot;
 
 async function activate(context) {
   extensionContext = context;
@@ -88,7 +86,6 @@ async function activate(context) {
 
   // --- react to repo changes (.git/HEAD, refs, index)
   setupGitWatcher(context);
-  ensureScm(context);
 
   // --- commands ------------------------------------------------------------
   const register = (id, fn) =>
@@ -128,14 +125,7 @@ async function activate(context) {
     await discoverRepo();
   });
   context.subscriptions.push(
-    vscode.commands.registerCommand('gitTree.refreshViews', () => refreshAll()),
-    vscode.commands.registerCommand('gitTree.scmCommit', async () => {
-      if (!scm?.sourceControl) return;
-      await actions.run(git, 'commit', { message: scm.sourceControl.inputBox.value });
-      scm.sourceControl.inputBox.value = '';
-      refreshAll();
-    }),
-    vscode.commands.registerCommand('gitTree.openScmChange', (item) => openChangeFile(item.file.path, item.staged, item.file))
+    vscode.commands.registerCommand('gitTree.refreshViews', () => refreshAll())
   );
 
   register('gitTree.fetch', () => actions.run(git, 'fetch', {}));
@@ -334,6 +324,10 @@ async function activate(context) {
   register('gitTree.openChange', async (item) => {
     await openChangeFile(item.file.path, item.staged, item.file);
   });
+  register('gitTree.openChangeFile', async (item) => openChangeAsFile(item));
+  register('gitTree.revealChangeInExplorer', async (item) => revealChangeInExplorer(item));
+  register('gitTree.copyChangePath', async (item) => copyChangePath(item, false));
+  register('gitTree.copyChangeRelativePath', async (item) => copyChangePath(item, true));
 
   register('gitTree.fileHistory', async (uri) => {
     const target = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
@@ -377,7 +371,6 @@ async function discoverRepo() {
 }
 
 function refreshAll() {
-  if (extensionContext) ensureScm(extensionContext);
   providers.branches && providers.branches.refresh();
   providers.stashes && providers.stashes.refresh();
   providers.tags && providers.tags.refresh();
@@ -385,69 +378,9 @@ function refreshAll() {
   providers.worktrees && providers.worktrees.refresh();
   providers.submodules && providers.submodules.refresh();
   providers.pullRequests && providers.pullRequests.refresh();
-  refreshScm();
   if (GraphPanel.current) GraphPanel.current.refresh();
   updateStatusBar();
   if (git) git.isRebaseInProgress().then((active) => vscode.commands.executeCommand('setContext', 'gitTree.rebaseInProgress', active));
-}
-
-function ensureScm(context) {
-  if (!git) {
-    disposeScm();
-    return;
-  }
-  if (scm && scmRoot === git.root) return;
-  disposeScm();
-  const sourceControl = vscode.scm.createSourceControl('gitTree', 'GitTree', vscode.Uri.file(git.root));
-  sourceControl.inputBox.placeholder = 'Message (Ctrl+Enter to commit)';
-  sourceControl.acceptInputCommand = { command: 'gitTree.scmCommit', title: 'Commit' };
-  const staged = sourceControl.createResourceGroup('staged', 'Staged Changes');
-  const working = sourceControl.createResourceGroup('working', 'Changes');
-  scm = { sourceControl, staged, working };
-  scmRoot = git.root;
-  context.subscriptions.push(sourceControl);
-  refreshScm();
-}
-
-function disposeScm() {
-  if (scm?.sourceControl) scm.sourceControl.dispose();
-  scm = undefined;
-  scmRoot = undefined;
-}
-
-async function refreshScm() {
-  if (!git || !scm) return;
-  const status = await git.getStatus();
-  const staged = status.files.filter((file) => file.x !== ' ' && file.x !== '?');
-  const working = status.files.filter((file) => file.y !== ' ' || file.x === '?');
-  scm.staged.resourceStates = staged.map((file) => scmResource(file, true));
-  scm.working.resourceStates = working.map((file) => scmResource(file, false));
-  scm.sourceControl.count = status.count || 0;
-}
-
-function scmResource(file, staged) {
-  const status = staged ? file.x : file.x === '?' ? 'U' : file.y;
-  const uri = vscode.Uri.file(path.join(git.root, file.path));
-  return {
-    resourceUri: uri,
-    contextValue: staged ? 'gitTree.changeStaged' : 'gitTree.changeWorking',
-    file,
-    staged,
-    command: {
-      command: 'gitTree.openScmChange',
-      title: 'Open Changes',
-      arguments: [{ file, staged }]
-    },
-    decorations: {
-      tooltip: `${statusName(status)}: ${file.path}`,
-      strikeThrough: status === 'D',
-      faded: false
-    }
-  };
-}
-
-function statusName(status) {
-  return ({ A: 'Added', U: 'Untracked', M: 'Modified', D: 'Deleted', R: 'Renamed', C: 'Conflicted' })[status] || status;
 }
 
 function shellQuote(value) {
@@ -622,6 +555,47 @@ async function openChangeFile(filePath, staged, file) {
     ? revisionUri(':0')
     : deleted ? revisionUri('', true) : vscode.Uri.file(path.join(git.root, filePath));
   await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(filePath)} (Changes)`);
+}
+
+function changeRelativePath(item) {
+  if (!item) return '';
+  if (item.file?.path) return item.file.path.replace(/\\/g, '/');
+  if (item.resourceUri?.fsPath) return path.relative(git.root, item.resourceUri.fsPath).replace(/\\/g, '/');
+  return '';
+}
+
+function changeAbsolutePath(item) {
+  if (!item) return '';
+  if (item.resourceUri?.fsPath) return item.resourceUri.fsPath;
+  const relative = changeRelativePath(item);
+  return relative ? path.join(git.root, relative) : '';
+}
+
+async function openChangeAsFile(item) {
+  const absolutePath = changeAbsolutePath(item);
+  if (!absolutePath) return;
+  if (!fs.existsSync(absolutePath) || fs.statSync(absolutePath).isDirectory()) {
+    vscode.window.showWarningMessage('This change cannot be opened as a normal file. It may be deleted or a folder.');
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath));
+  await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+async function revealChangeInExplorer(item) {
+  const absolutePath = changeAbsolutePath(item);
+  if (!absolutePath) return;
+  const target = fs.existsSync(absolutePath)
+    ? vscode.Uri.file(absolutePath)
+    : vscode.Uri.file(path.dirname(absolutePath));
+  await vscode.commands.executeCommand('revealInExplorer', target);
+}
+
+async function copyChangePath(item, relative) {
+  const value = relative ? changeRelativePath(item) : changeAbsolutePath(item);
+  if (!value) return;
+  await vscode.env.clipboard.writeText(value);
+  vscode.window.setStatusBarMessage(`Copied ${relative ? 'relative path' : 'path'}: ${value}`, 2500);
 }
 
 async function openCompareFile(filePath, compare) {
