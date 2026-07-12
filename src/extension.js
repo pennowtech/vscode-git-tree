@@ -102,7 +102,7 @@ async function activate(context) {
     context.subscriptions.push(
       vscode.commands.registerCommand(id, async (...args) => {
         try {
-          if (!git && id !== 'gitTree.refresh') {
+          if (!git && id !== 'gitTree.refresh' && id !== 'gitTree.openUserGuide') {
             await discoverRepo();
             if (!git) {
               vscode.window.showWarningMessage('No git repository found in this workspace.');
@@ -120,6 +120,10 @@ async function activate(context) {
   let selectedCompareRef;
 
   register('gitTree.showGraph', () => GraphPanel.show(context, git));
+  register('gitTree.openUserGuide', async () => {
+    const guide = vscode.Uri.file(path.join(context.extensionPath, 'docs', 'USER_GUIDE.md'));
+    await vscode.commands.executeCommand('markdown.showPreview', guide);
+  });
   register('gitTree.showHistory', async () => {
     const active = vscode.window.activeTextEditor?.document.uri;
     if (active?.scheme === 'file') {

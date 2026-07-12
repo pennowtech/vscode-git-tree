@@ -154,19 +154,43 @@ class GraphPanel {
   }
 
   async sendWorkingTreeDetails() {
-    const status = await this.git.getStatus();
-    const files = status.files.map((f) => ({
-      status: f.x === '?' ? 'U' : f.x !== ' ' ? f.x : f.y,
-      path: f.path,
-      origPath: f.origPath,
-      additions: null,
-      deletions: null,
-      x: f.x,
-      y: f.y,
-      staged: f.x !== ' ' && f.x !== '?',
-      untracked: f.x === '?'
-    }));
-    this.post({ type: 'details', details: { workingTree: true, files } });
+    const [status, head] = await Promise.all([this.git.getStatus(), this.git.getHead()]);
+    const staged = [];
+    const unstaged = [];
+    for (const f of status.files) {
+      const untracked = f.x === '?';
+      if (untracked) {
+        unstaged.push({
+          status: 'U', path: f.path, origPath: f.origPath,
+          additions: null, deletions: null, x: '?', y: '?', staged: false, untracked: true
+        });
+        continue;
+      }
+      // A file can be both staged (index vs HEAD) and unstaged (worktree vs index).
+      if (f.x !== ' ') {
+        staged.push({
+          status: f.x, path: f.path, origPath: f.origPath,
+          additions: null, deletions: null, x: f.x, y: f.y, staged: true, untracked: false
+        });
+      }
+      if (f.y !== ' ') {
+        unstaged.push({
+          status: f.y, path: f.path, origPath: f.origPath,
+          additions: null, deletions: null, x: f.x, y: f.y, staged: false, untracked: false
+        });
+      }
+    }
+    this.post({
+      type: 'details',
+      details: {
+        workingTree: true,
+        branch: head.branch || '',
+        detached: !head.branch,
+        headSha: head.sha,
+        staged,
+        unstaged
+      }
+    });
   }
 
   async sendCompare(a, b) {
@@ -177,17 +201,38 @@ class GraphPanel {
   }
 
   /** Open a VS Code diff editor for one file of a commit / compare / working tree. */
-  async openFileDiff({ sha, base, filePath, origPath, status, workingTree }) {
-    const title = `${path.basename(filePath)} (${workingTree ? 'Working Tree' : (base ? `${short(base)} ↔ ${short(sha)}` : short(sha))})`;
-    const right = workingTree
-      ? vscode.Uri.file(path.join(this.git.root, filePath))
-      : status === 'D'
-        ? emptyUri(this.git.root, filePath)
-        : gitUri(this.git.root, sha, filePath);
-    const leftRev = workingTree ? (base || 'HEAD') : base || `${sha}^`;
-    const left = status === 'A' || status === 'U'
-      ? emptyUri(this.git.root, filePath)
-      : gitUri(this.git.root, leftRev, origPath || filePath);
+  async openFileDiff({ sha, base, filePath, origPath, status, workingTree, staged, untracked }) {
+    const root = this.git.root;
+    const workingFile = vscode.Uri.file(path.join(root, filePath));
+    let left, right, title;
+    if (workingTree && base) {
+      // Compare a ref against the working tree: base ↔ working file
+      title = `${path.basename(filePath)} (${short(base)} ↔ Working Tree)`;
+      left = status === 'A' || status === 'U'
+        ? emptyUri(root, filePath)
+        : gitUri(root, base, origPath || filePath);
+      right = status === 'D' ? emptyUri(root, filePath) : workingFile;
+    } else if (workingTree && staged) {
+      // Staged: HEAD ↔ index (:0)
+      title = `${path.basename(filePath)} (Staged)`;
+      left = status === 'A' ? emptyUri(root, filePath) : gitUri(root, 'HEAD', origPath || filePath);
+      right = status === 'D' ? emptyUri(root, filePath) : gitUri(root, ':0', filePath);
+    } else if (workingTree) {
+      // Unstaged: index (:0) ↔ working tree
+      title = `${path.basename(filePath)} (Working Tree)`;
+      left = untracked || status === 'A' || status === 'U'
+        ? emptyUri(root, filePath)
+        : gitUri(root, ':0', origPath || filePath);
+      right = status === 'D' ? emptyUri(root, filePath) : workingFile;
+    } else {
+      // Commit or compare: base ↔ sha
+      title = `${path.basename(filePath)} (${base ? `${short(base)} ↔ ${short(sha)}` : short(sha)})`;
+      right = status === 'D' ? emptyUri(root, filePath) : gitUri(root, sha, filePath);
+      const leftRev = base || `${sha}^`;
+      left = status === 'A' || status === 'U'
+        ? emptyUri(root, filePath)
+        : gitUri(root, leftRev, origPath || filePath);
+    }
     await vscode.commands.executeCommand('vscode.diff', left, right, title, { preview: true });
   }
 
@@ -201,7 +246,7 @@ class GraphPanel {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
+      content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="${mediaUri('graph.css')}" rel="stylesheet">
 <title>GitTree Graph</title>

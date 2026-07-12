@@ -38,6 +38,19 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "GitTree requires a local or remote filesystem repository and the Git CLI."
+    },
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "GitTree runs Git commands for the active repository. Trust the workspace before enabling it."
+    }
+  },
   "main": "./src/extension.js",
   "scripts": {
     "test": "node test/run-tests.js",
@@ -52,6 +65,7 @@
   "contributes": {
     "commands": [
       { "command": "gitTree.showGraph", "title": "Show Commit Graph", "icon": "$(git-branch)" },
+      { "command": "gitTree.openUserGuide", "title": "Open User Guide", "icon": "$(book)" },
       { "command": "gitTree.refresh", "title": "Refresh", "icon": "$(refresh)" },
       { "command": "gitTree.fetch", "title": "Fetch", "icon": "$(cloud-download)" },
       { "command": "gitTree.pull", "title": "Pull", "icon": "$(arrow-down)" },
@@ -61,7 +75,7 @@
       { "command": "gitTree.pushBranch", "title": "Push Branch", "icon": "$(arrow-up)" },
       { "command": "gitTree.createBranch", "title": "Create Branch…", "icon": "$(add)" },
       { "command": "gitTree.checkoutBranch", "title": "Switch Branch", "icon": "$(arrow-swap)" },
-      { "command": "gitTree.mergeBranch", "title": "Merge into Current Branch" },
+      { "command": "gitTree.mergeBranch", "title": "Merge into Current Branch", "icon": "$(git-merge)" },
       { "command": "gitTree.rebaseOntoBranch", "title": "Rebase Current Branch onto This" },
       { "command": "gitTree.deleteBranch", "title": "Delete Branch…", "icon": "$(trash)" },
       { "command": "gitTree.renameBranch", "title": "Rename Branch…" },
@@ -100,7 +114,7 @@
       { "command": "gitTree.copyChangePath", "title": "Copy Path", "icon": "$(copy)" },
       { "command": "gitTree.copyChangeRelativePath", "title": "Copy Relative Path", "icon": "$(copy)" }
       ,{ "command": "gitTree.setCommitMessage", "title": "Set Commit Message…", "icon": "$(edit)" }
-      ,{ "command": "gitTree.showCommit", "title": "Show Commit in Graph" }
+      ,{ "command": "gitTree.showCommit", "title": "Show Commit in Graph", "icon": "$(eye)" }
       ,{ "command": "gitTree.amendCommit", "title": "Amend Last Commit", "icon": "$(git-commit)" }
       ,{ "command": "gitTree.signCommit", "title": "Sign and Commit…", "icon": "$(verified-filled)" }
       ,{ "command": "gitTree.interactiveRebase", "title": "Interactive Rebase…", "icon": "$(list-ordered)" }
@@ -160,6 +174,9 @@
     },
     "menus": {
       "view/title": [
+        { "command": "gitTree.openUserGuide", "when": "view == gitTree.changes", "group": "navigation@99" },
+        { "command": "gitTree.openUserGuide", "when": "view == gitTree.branches", "group": "navigation@99" },
+        { "command": "gitTree.openUserGuide", "when": "view == gitTree.pullRequests", "group": "navigation@99" },
         { "command": "gitTree.commit", "when": "view == gitTree.changes", "group": "navigation@1" },
         { "command": "gitTree.stageAll", "when": "view == gitTree.changes", "group": "navigation@2" },
         { "command": "gitTree.stashAdvanced", "when": "view == gitTree.changes", "group": "navigation@3" },
@@ -214,6 +231,11 @@
         { "command": "gitTree.stageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.working", "group": "1_actions@1" },
         { "command": "gitTree.unstageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.staged", "group": "1_actions@1" },
         { "command": "gitTree.checkoutBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "inline@1" },
+        { "command": "gitTree.pullBranch", "when": "view == gitTree.branches && viewItem == gitTree.branchCurrent", "group": "inline@1" },
+        { "command": "gitTree.pushBranch", "when": "view == gitTree.branches && viewItem == gitTree.branchCurrent", "group": "inline@2" },
+        { "command": "gitTree.mergeBranch", "when": "view == gitTree.branches && viewItem == gitTree.branch", "group": "inline@2" },
+        { "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "inline@3" },
+        { "command": "gitTree.deleteBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "inline@4" },
         { "command": "gitTree.checkoutBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "1_actions@1" },
         { "command": "gitTree.pullBranch", "when": "view == gitTree.branches && viewItem == gitTree.branchCurrent", "group": "1_sync@1" },
         { "command": "gitTree.pushBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent)", "group": "1_sync@2" },
@@ -240,6 +262,9 @@
         { "command": "gitTree.deleteTag", "when": "view == gitTree.tags && viewItem == gitTree.tag", "group": "2_modify@1" },
         { "command": "gitTree.copyRefName", "when": "view == gitTree.tags && viewItem == gitTree.tag", "group": "3_copy@1" }
         ,{ "command": "gitTree.showCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@1" }
+        ,{ "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@2" }
+        ,{ "command": "gitTree.cherryPickCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@3" }
+        ,{ "command": "gitTree.copyCommitSha", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@4" }
         ,{ "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "1_commit@1" }
         ,{ "command": "gitTree.selectForCompare", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "1_commit@2" }
         ,{ "command": "gitTree.compareWithSelected", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "1_commit@3" }

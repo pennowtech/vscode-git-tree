@@ -104,7 +104,9 @@ class Git {
   /** Working tree status. Returns {files:[{x,y,path,origPath}], count}. */
   async getStatus() {
     // -z avoids quoted/escaped paths and makes renames unambiguous.
-    const out = await this.exec(['status', '--porcelain=v1', '-z']).catch(() => '');
+    // -uall lists each untracked file individually instead of collapsing a new
+    // directory into a single "folder/" entry.
+    const out = await this.exec(['status', '--porcelain=v1', '-z', '-uall']).catch(() => '');
     const files = [];
     const records = out.split('\0');
     for (let i = 0; i < records.length; i++) {

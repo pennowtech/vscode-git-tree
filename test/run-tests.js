@@ -58,6 +58,10 @@ function testManifestCommands() {
 
 function testManifestViewsAndConfig() {
   const pkg = readJson('package.json');
+  assert.deepStrictEqual(pkg.extensionKind, ['workspace'], 'GitTree must run in the Node workspace extension host.');
+  assert.strictEqual(pkg.capabilities?.virtualWorkspaces?.supported, false, 'Virtual workspaces must remain unsupported.');
+  assert.strictEqual(pkg.capabilities?.untrustedWorkspaces?.supported, false, 'Untrusted workspaces must remain unsupported.');
+  assert(pkg.main && !pkg.browser, 'GitTree must expose a Node main entry and no Web Worker entry.');
   const containers = pkg.contributes.viewsContainers?.activitybar || [];
   assert(containers.some((container) => container.id === 'gitTree'), 'GitTree activity bar container missing.');
 

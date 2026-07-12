@@ -216,6 +216,20 @@
     return html;
   }
 
+  /** Quick action buttons shown on the right of a graph row on hover. */
+  function rowActions(isWT) {
+    if (isWT) {
+      return `<span class="row-actions">` +
+        `<button data-row-act="stash" title="Stash working changes">▣</button>` +
+      `</span>`;
+    }
+    return `<span class="row-actions">` +
+      `<button data-row-act="compareWorking" title="Compare with working tree">⇄</button>` +
+      `<button data-row-act="cherryPick" title="Cherry-pick this commit">✓</button>` +
+      `<button data-row-act="copySha" title="Copy commit SHA">⧉</button>` +
+    `</span>`;
+  }
+
   function renderGraph() {
     let commits = state.commits;
     // pseudo working-tree row so the layout draws its connection naturally
@@ -254,7 +268,7 @@
         `<tr class="${cls}" data-sha="${esc(c.sha)}">` +
           `<td class="cell-refs">${isWT ? '' : refChips(c, row.colorIdx)}</td>` +
           `<td class="cell-graph">${rowSvg(row, laneCount, isWT)}</td>` +
-          `<td class="cell-msg" title="${esc(c.subject)}">${msg}</td>` +
+          `<td class="cell-msg" title="${esc(c.subject)}">${msg}${rowActions(isWT)}</td>` +
           `<td class="cell-author" title="${esc(c.email || '')}">${esc(c.author)}</td>` +
           `<td class="cell-date" title="${esc(fullDate(c.time))}">${isWT ? '' : esc(fmtDate(c.time))}</td>` +
           `<td class="cell-sha">${isWT ? '' : esc(shortSha(c.sha))}</td>` +
@@ -285,42 +299,75 @@
 
   // ========================================================== details pane
 
-  function fileRowHtml(f, extra, depth = 0) {
+  function initials(name) {
+    const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  function avatarColor(seed) {
+    let h = 0;
+    const s = String(seed || '');
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return PALETTE[h % PALETTE.length];
+  }
+
+  function fileStatsHtml(f) {
+    if (f.additions == null && f.deletions == null) return '';
+    return `<span class="file-stats"><span class="stat-add">+${f.additions ?? 0}</span> <span class="stat-del">−${f.deletions ?? 0}</span></span>`;
+  }
+
+  function refBadge(r) {
+    const name = esc(r.name);
+    if (r.type === 'tag') return `<span class="chip chip-tag mono" title="Tag">⌂ ${name}</span>`;
+    if (r.type === 'remote') return `<span class="chip chip-remote" title="Remote branch">☁ ${name}</span>`;
+    if (r.type === 'head') return `<span class="chip" title="Current HEAD"><b>HEAD</b></span>`;
+    return `<span class="chip" title="Branch">${r.head ? '✓ ' : ''}${name}</span>`;
+  }
+
+  function wtAttrs(f) {
+    return `data-wt="1" data-staged="${f.staged ? 1 : 0}" data-untracked="${f.untracked ? 1 : 0}"`;
+  }
+
+  function wtActions(f) {
+    const buttons = [];
+    if (f.staged) {
+      buttons.push(`<button data-file-act="unstage" title="Unstage changes">−</button>`);
+    } else {
+      buttons.push(`<button data-file-act="stage" title="Stage changes">＋</button>`);
+      buttons.push(`<button data-file-act="discard" title="Discard changes">↶</button>`);
+      buttons.push(`<button data-file-act="stashFile" title="Stash this file">▣</button>`);
+    }
+    buttons.push(`<button data-file-act="reveal" title="Reveal in Explorer">◉</button>`);
+    buttons.push(`<button data-file-act="terminal" title="Open containing folder in terminal">⌘</button>`);
+    return `<span class="file-actions">${buttons.join('')}</span>`;
+  }
+
+  /** @param {{attrs?: string, actions?: string}} ctx */
+  function fileRowHtml(f, ctx, depth = 0) {
+    ctx = ctx || {};
     const idx = f.path.lastIndexOf('/');
     const dir = state.fileMode === 'tree' ? '' : (idx === -1 ? '' : f.path.slice(0, idx));
     const name = idx === -1 ? f.path : f.path.slice(idx + 1);
-    const stats =
-      f.additions != null || f.deletions != null
-        ? `<span class="file-stats"><span class="stat-add">+${f.additions ?? 0}</span> <span class="stat-del">−${f.deletions ?? 0}</span></span>`
-        : '';
     const tooltip = f.origPath ? `${f.origPath} → ${f.path}` : f.path;
     const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
     const iconClass = fileIconClass(name, extension);
-    const workingActions = String(extra || '').includes('data-wt=')
-      ? `<span class="file-actions">` +
-        (f.staged
-          ? `<button data-file-act="unstage" title="Unstage">−</button>`
-          : `<button data-file-act="stage" title="Stage">＋</button>`) +
-        `<button data-file-act="stashFile" title="Stash this file">▣</button>` +
-        `<button data-file-act="reveal" title="Reveal in Explorer">◉</button>` +
-        `<button data-file-act="terminal" title="Open containing folder in terminal">⌘</button>` +
-        `<button data-file-act="discard" title="Discard changes">↶</button></span>`
-      : '';
     return (
-      `<div class="file-row tree-row status-${esc(f.status)}" style="--depth:${depth}" data-path="${esc(f.path)}" data-orig="${esc(f.origPath || '')}" data-status="${esc(f.status)}" title="${esc(tooltip)}" ${extra || ''}>` +
+      `<div class="file-row tree-row status-${esc(f.status)}" data-path="${esc(f.path)}" data-orig="${esc(f.origPath || '')}" data-status="${esc(f.status)}" title="${esc(tooltip)}" ${ctx.attrs || ''}>` +
         `<span class="file-chevron-spacer" aria-hidden="true"></span>` +
-        `<span class="file-icon ${iconClass}" aria-hidden="true"></span>` +
+        `<span class="file-icon ${iconClass}" aria-hidden="true">${fileIconSvg(name, extension)}</span>` +
         `<span class="file-name">${esc(name)}</span>` +
         `<span class="file-dir">${esc(dir)}</span>` +
-        stats +
-        workingActions +
+        fileStatsHtml(f) +
+        (ctx.actions || '') +
         `<span class="file-status fs-${esc(f.status)}" title="${esc(statusLabel(f.status))}">${esc(f.status)}</span>` +
       `</div>`
     );
   }
 
   function statusLabel(status) {
-    return ({ A: 'Added', U: 'Untracked', M: 'Modified', D: 'Deleted', R: 'Renamed', C: 'Conflicted' })[status] || status;
+    return ({ A: 'Added', U: 'Untracked', M: 'Modified', D: 'Deleted', R: 'Renamed', C: 'Conflicted', T: 'Type changed' })[status] || status;
   }
 
   function fileIconClass(name, extension) {
@@ -338,8 +385,78 @@
     return 'icon-file';
   }
 
-  function fileListHtml(files, extraFor) {
-    if (state.fileMode === 'list') return `<div class="file-tree flat">${files.map((f) => fileRowHtml(f, extraFor(f), 0)).join('')}</div>`;
+  // --- inline SVG icons (currentColor, VS Code codicon style) -------------
+  const ICONS = {
+    'git-branch':
+      '<circle cx="4.5" cy="3.2" r="1.5" fill="currentColor" stroke="none"/>' +
+      '<circle cx="4.5" cy="12.8" r="1.5" fill="currentColor" stroke="none"/>' +
+      '<circle cx="11.5" cy="5" r="1.5" fill="currentColor" stroke="none"/>' +
+      '<path d="M4.5 4.7v6.6"/><path d="M4.5 8c0-2 1.6-3 3.6-3H10"/>',
+    tag:
+      '<path d="M7.2 2.2H3.2A1 1 0 0 0 2.2 3.2v4l6.8 6.8 5-5L7.2 2.2Z"/>' +
+      '<circle cx="5" cy="5" r="0.9" fill="currentColor" stroke="none"/>',
+    'list-tree':
+      '<path d="M2.5 3.4h1.6M6.5 3.4h7M6 8h1.4M9.5 8h4M6 12.6h1.4M9.5 12.6h4"/>',
+    'list-flat':
+      '<path d="M2.5 3.4h1.6M6 3.4h7.5M2.5 8h1.6M6 8h7.5M2.5 12.6h1.6M6 12.6h7.5"/>'
+  };
+
+  function svgIcon(name, size = 13) {
+    return `<svg class="svg-ico" viewBox="0 0 16 16" width="${size}" height="${size}" ` +
+      `fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  }
+
+  function fileShape(name, ext) {
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'svg'].includes(ext)) return 'image';
+    if (['md', 'mdx', 'txt', 'rst', 'pdf'].includes(ext) || /^(readme|changelog|license)(\.|$)/i.test(name)) return 'text';
+    if (['yml', 'yaml', 'toml', 'ini', 'env', 'cfg', 'conf'].includes(ext)) return 'config';
+    if (['sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd'].includes(ext)) return 'terminal';
+    if (['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'json', 'jsonc', 'html', 'htm', 'xml', 'vue',
+      'css', 'scss', 'sass', 'less', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'rb',
+      'php', 'cs', 'swift', 'kt', 'sql'].includes(ext)) return 'code';
+    return 'file';
+  }
+
+  function fileIconSvg(name, ext) {
+    const doc = '<path d="M9 1.6H4.6A1.6 1.6 0 0 0 3 3.2v9.6a1.6 1.6 0 0 0 1.6 1.6h6.8a1.6 1.6 0 0 0 1.6-1.6V5.6L9 1.6Z"/><path d="M9 1.6V5.6h4"/>';
+    let inner;
+    switch (fileShape(name, ext)) {
+      case 'image':
+        inner = '<rect x="2.4" y="3.4" width="11.2" height="9.2" rx="1.3"/>' +
+          '<circle cx="6" cy="6.6" r="1.05"/><path d="M2.9 11.6 6.4 8.6 9 10.7l2-1.6 2.1 2"/>';
+        return wrapFileSvg(inner);
+      case 'config':
+        inner = '<circle cx="8" cy="8" r="2.05"/>' +
+          '<path d="M8 2.5v1.5M8 12v1.5M2.5 8h1.5M12 8h1.5M4.1 4.1l1.05 1.05M10.85 10.85 11.9 11.9M11.9 4.1 10.85 5.15M5.15 10.85 4.1 11.9"/>';
+        return wrapFileSvg(inner);
+      case 'terminal':
+        inner = '<rect x="2.3" y="3.4" width="11.4" height="9.2" rx="1.3"/><path d="M5 7.2l1.9 1.9L5 11M8.6 11.2h3"/>';
+        return wrapFileSvg(inner);
+      case 'code':
+        return wrapFileSvg(doc + '<path d="M6.7 8.4 5.3 9.9l1.4 1.5M9.3 8.4l1.4 1.5-1.4 1.5"/>');
+      case 'text':
+        return wrapFileSvg(doc + '<path d="M5.4 8.6h5M5.4 10.5h5M5.4 12.3h3"/>');
+      default:
+        return wrapFileSvg(doc);
+    }
+  }
+
+  function wrapFileSvg(paths) {
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" ` +
+      `stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  }
+
+  /** Icon-only tree/list toggle showing the mode it will switch to. */
+  function toggleModeBtn() {
+    const toList = state.fileMode === 'tree';
+    const tip = toList ? 'View as list' : 'View as tree';
+    return `<button class="toggle-file-mode icon-only" title="${tip}" aria-label="${tip}">` +
+      `${svgIcon(toList ? 'list-flat' : 'list-tree')}</button>`;
+  }
+
+  function fileListHtml(files, ctxFor) {
+    if (!files.length) return `<div class="files-empty">No files</div>`;
+    if (state.fileMode === 'list') return `<div class="file-tree flat">${files.map((f) => fileRowHtml(f, ctxFor(f), 0)).join('')}</div>`;
     const root = { folders: new Map(), files: [] };
     for (const file of files) {
       const parts = file.path.split('/');
@@ -356,7 +473,7 @@
     const renderNode = (node, depth) => {
       const folders = [...node.folders.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, child]) =>
         `<details class="file-folder" data-depth="${depth}" open>` +
-          `<summary class="tree-row folder-row" style="--depth:${depth}" title="${esc(name)}">` +
+          `<summary class="tree-row folder-row" title="${esc(name)}">` +
             `<span class="folder-chevron" aria-hidden="true"></span><span class="folder-icon" aria-hidden="true"></span>` +
             `<span class="tree-name">${esc(name)}</span>` +
           `</summary>` +
@@ -365,16 +482,29 @@
       ).join('');
       const leaves = node.files
         .sort((a, b) => a.path.localeCompare(b.path))
-        .map((file) => fileRowHtml(file, extraFor(file), depth))
+        .map((file) => fileRowHtml(file, ctxFor(file), depth))
         .join('');
       return folders + leaves;
     };
     return `<div class="file-tree">${renderNode(root, 0)}</div>`;
   }
 
-  function fileControls() {
-    return `<div class="file-toolbar"><input class="file-filter" placeholder="Filter files…">` +
-      `<button class="toggle-file-mode">${state.fileMode === 'tree' ? '☷ List' : '🌳 Tree'}</button></div>`;
+  /** Section header for a files group: title, count, +/− totals, optional actions. */
+  function filesSectionHead(title, count, opts = {}) {
+    const stats = (opts.add != null || opts.del != null)
+      ? `<span class="stat-add">+${opts.add || 0}</span> <span class="stat-del">−${opts.del || 0}</span>` : '';
+    const actions = opts.actions || '';
+    const toggle = opts.toggle !== false ? toggleModeBtn() : '';
+    return `<div class="d-section files-section-head${opts.className ? ' ' + opts.className : ''}">` +
+      `<span class="d-section-title">${esc(title)}</span>` +
+      `<span class="file-count">${count}</span>` +
+      stats +
+      `<span class="section-actions">${actions}${toggle}</span>` +
+    `</div>`;
+  }
+
+  function filesFilter() {
+    return `<div class="files-filter"><input class="file-filter" placeholder="Filter files…" spellcheck="false"></div>`;
   }
 
   function compareControls(source, target) {
@@ -419,6 +549,13 @@
       if (!source || !target) return;
       post({ type: 'compare', a: source.value, b: target.value === 'Working Tree' ? 'WT' : target.value });
     };
+    const commitMessage = el('commitMessage');
+    if (commitMessage) commitMessage.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        post({ type: 'action', action: 'commit', args: { message: commitMessage.value } });
+      }
+    });
   }
 
   function renderDetails(d) {
@@ -426,57 +563,110 @@
     state.lastCompare = null;
     state.compare = null;
     renderGraph();
-    if (d.workingTree) {
-      detail.innerHTML =
-        `<div class="d-title">Uncommitted changes</div>` +
-        `<div class="d-meta">${d.files.length} file(s) changed in the working tree. Click a file to diff against HEAD.</div>` +
-        compareControls(state.defaultCompareRef, 'Working Tree') +
-        `<div class="commit-box"><textarea id="commitMessage" rows="3" placeholder="Commit message…"></textarea>` +
-          `<div class="d-actions"><button data-act="commit" class="primary">✓ Commit</button>` +
-          `<button data-act="amendCommit">↺ Amend</button><button data-act="signCommit">🔏 Sign & Commit</button></div></div>` +
-        fileControls().replace('</div>', '') +
-          `<button data-act="openTerminal">⌘ Terminal</button></div>` +
-        `<div class="d-actions">` +
-          `<button data-act="stashSave">▣ Stash…</button>` +
-          `<button data-act="stageAll">＋ Stage all</button><button data-act="unstageAll">− Unstage all</button>` +
-        `</div>` +
-        `<div class="d-section">Files</div>` +
-        `<div id="workingFiles">${fileListHtml(d.files, (f) => `data-wt="1" data-staged="${f.staged ? 1 : 0}" data-untracked="${f.untracked ? 1 : 0}"`)}</div>`;
-      wireFileControls();
-      return;
-    }
-    const refs = d.refs && d.refs.length
-      ? `<div class="d-meta">${d.refs.map((r) => esc(r.type === 'tag' ? '⌂ ' + r.name : r.name)).join(' · ')}</div>`
-      : '';
-    const parents = d.parents.length
-      ? `<div class="d-meta">Parent${d.parents.length > 1 ? 's' : ''}: ` +
-        d.parents.map((p) => `<span class="d-sha" data-goto="${esc(p)}">${shortSha(p)}</span>`).join(', ') +
-        `</div>`
-      : '<div class="d-meta">Root commit</div>';
+    detail.classList.remove('detail-empty');
+    detail.innerHTML = d.workingTree ? workingTreeHtml(d) : commitHtml(d);
+    wireFileControls();
+  }
+
+  function commitHtml(d) {
+    const sig = (state.commits.find((c) => c.sha === d.sha) || {}).signature;
+    const sigBadge = sig === 'G'
+      ? `<span class="badge badge-ok" title="Good signature">✓ Verified</span>`
+      : sig === 'B' ? `<span class="badge badge-warn" title="Bad signature">⚠ Bad signature</span>` : '';
+    const mergeBadge = d.isMerge ? `<span class="badge">merge</span>` : '';
+    const lines = d.body.split('\n');
+    const subject = lines[0];
+    const bodyRest = lines.slice(1).join('\n').trim();
     const totalAdd = d.files.reduce((s, f) => s + (f.additions || 0), 0);
     const totalDel = d.files.reduce((s, f) => s + (f.deletions || 0), 0);
-    const bodyRest = d.body.split('\n').slice(1).join('\n').trim();
-    detail.innerHTML =
-      `<div class="d-meta"><span class="d-sha" data-copy="${esc(d.sha)}" title="Click to copy full SHA">${shortSha(d.sha)}</span>` +
-        (d.isMerge ? ' · <b>merge commit</b>' : '') + `</div>` +
-      `<div class="d-title">${esc(d.body.split('\n')[0])}</div>` +
-      `<div class="d-meta">Author: <b>${esc(d.author)}</b> &lt;${esc(d.email)}&gt; · ${esc(fullDate(d.authorTime))}</div>` +
-      (d.committer !== d.author ? `<div class="d-meta">Committer: ${esc(d.committer)} · ${esc(fullDate(d.commitTime))}</div>` : '') +
-      refs + parents +
-      (bodyRest ? `<div class="d-body">${esc(bodyRest)}</div>` : '') +
-      compareControls(state.defaultCompareRef, d.sha) +
-      `<div class="d-actions" data-sha="${esc(d.sha)}" data-merge="${d.isMerge ? 1 : 0}">` +
-        `<button data-act="checkoutDetached">⇥ Checkout</button>` +
-        `<button data-act="createBranch">⑂ Branch…</button>` +
-        `<button data-act="createTag">⌂ Tag…</button>` +
-        `<button data-act="cherryPick">✓ Cherry-pick</button>` +
-        `<button data-act="revert">↶ Revert</button>` +
-        `<button data-act="resetMenu">↺ Reset…</button>` +
-        `<button data-act="copySha">⧉ Copy SHA</button>` +
+    const refs = d.refs && d.refs.length
+      ? `<div class="d-refs">${d.refs.map(refBadge).join('')}</div>` : '';
+    const parents = d.parents.length
+      ? `<div class="d-meta">Parent${d.parents.length > 1 ? 's' : ''}: ` +
+        d.parents.map((p) => `<span class="d-sha mono" data-goto="${esc(p)}">${shortSha(p)}</span>`).join(' ') + `</div>`
+      : `<div class="d-meta">Root commit</div>`;
+    const committed = d.committer !== d.author || d.commitTime !== d.authorTime
+      ? ` · committed by <b>${esc(d.committer)}</b> <span title="${esc(fullDate(d.commitTime))}">${esc(fmtDate(d.commitTime))}</span>` : '';
+    return `<div class="d-head">` +
+        `<div class="d-head-top">` +
+          `<span class="avatar" style="--avatar:${avatarColor(d.email || d.author)}">${esc(initials(d.author))}</span>` +
+          `<div class="d-head-titles">` +
+            `<div class="d-title">${esc(subject)}</div>` +
+            `<div class="d-sub">` +
+              `<span class="d-sha mono" data-copy="${esc(d.sha)}" title="Copy full SHA">${shortSha(d.sha)} ⧉</span>` +
+              sigBadge + mergeBadge +
+            `</div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="d-actions" data-sha="${esc(d.sha)}" data-merge="${d.isMerge ? 1 : 0}">` +
+          `<button data-act="checkoutDetached">⇥ Checkout</button>` +
+          `<button data-act="createBranch">${svgIcon('git-branch')} Branch…</button>` +
+          `<button data-act="createTag">${svgIcon('tag')} Tag…</button>` +
+          `<button data-act="cherryPick">✓ Cherry-pick</button>` +
+          `<button data-act="revert">↶ Revert</button>` +
+          `<button data-act="resetMenu">↺ Reset…</button>` +
+        `</div>` +
       `</div>` +
-      `<div class="d-section">Files changed (${d.files.length}) · <span class="stat-add">+${totalAdd}</span> <span class="stat-del">−${totalDel}</span></div>` + fileControls() +
-      fileListHtml(d.files, () => `data-sha="${esc(d.sha)}"`);
-    wireFileControls();
+      `<div class="d-scroll">` +
+        `<div class="d-meta">Author <b>${esc(d.author)}</b> &lt;${esc(d.email)}&gt;</div>` +
+        `<div class="d-meta">Authored <span title="${esc(fullDate(d.authorTime))}">${esc(fmtDate(d.authorTime))}</span>${committed}</div>` +
+        refs + parents +
+        (bodyRest ? `<div class="d-body">${esc(bodyRest)}</div>` : '') +
+        compareControls(state.defaultCompareRef, d.sha) +
+        filesSectionHead('Files changed', d.files.length, { add: totalAdd, del: totalDel }) +
+        filesFilter() +
+        fileListHtml(d.files, () => ({ attrs: `data-sha="${esc(d.sha)}"` })) +
+      `</div>`;
+  }
+
+  function workingTreeHtml(d) {
+    const staged = d.staged || [];
+    const unstaged = d.unstaged || [];
+    const total = staged.length + unstaged.length;
+    const where = d.detached ? `detached at ${shortSha(d.headSha)}` : (d.branch || 'HEAD');
+    const stagedSection = staged.length
+      ? filesSectionHead('Staged Changes', staged.length, {
+          toggle: false, className: 'staged-head',
+          actions: `<button data-act="unstageAll" title="Unstage all">−</button>`
+        }) + fileListHtml(staged, (f) => ({ attrs: wtAttrs(f), actions: wtActions(f) }))
+      : '';
+    const changesSection = unstaged.length
+      ? filesSectionHead('Changes', unstaged.length, {
+          toggle: false,
+          actions: `<button data-act="stageAll" title="Stage all">＋</button>`
+        }) + fileListHtml(unstaged, (f) => ({ attrs: wtAttrs(f), actions: wtActions(f) }))
+      : '';
+    const clean = total === 0 ? `<div class="files-empty">✓ Working tree clean</div>` : '';
+    return `<div class="d-head">` +
+        `<div class="d-head-top">` +
+          `<span class="wt-dot" aria-hidden="true">●</span>` +
+          `<div class="d-head-titles">` +
+            `<div class="d-title">Uncommitted changes</div>` +
+            `<div class="d-sub">${total} change${total === 1 ? '' : 's'} on <b>${esc(where)}</b></div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="commit-box">` +
+          `<textarea id="commitMessage" rows="3" placeholder="Commit message (Ctrl+Enter to commit)"></textarea>` +
+          `<div class="d-actions">` +
+            `<button data-act="commit" class="primary">✓ Commit</button>` +
+            `<button data-act="amendCommit">↺ Amend</button>` +
+            `<button data-act="signCommit">🔏 Sign</button>` +
+          `</div>` +
+        `</div>` +
+        `<div class="d-actions">` +
+          `<button data-act="stageAll">＋ Stage all</button>` +
+          `<button data-act="unstageAll">− Unstage all</button>` +
+          `<button data-act="stashSave">▣ Stash…</button>` +
+          `<button data-act="refresh">⟳ Refresh</button>` +
+          `<button data-act="openTerminal">⌘ Terminal</button>` +
+        `</div>` +
+      `</div>` +
+      `<div class="d-scroll">` +
+        compareControls(state.defaultCompareRef, 'Working Tree') +
+        `<div class="files-toolbar"><input class="file-filter" placeholder="Filter files…" spellcheck="false">` +
+          toggleModeBtn() + `</div>` +
+        stagedSection + changesSection + clean +
+      `</div>`;
   }
 
   function renderCompare(r) {
@@ -484,55 +674,50 @@
     state.lastDetails = null;
     state.compare = { a: r.a, b: r.b };
     renderGraph();
+    detail.classList.remove('detail-empty');
     const totalAdd = r.files.reduce((sum, file) => sum + (file.additions || 0), 0);
     const totalDel = r.files.reduce((sum, file) => sum + (file.deletions || 0), 0);
-    const compareFiles = fileListHtml(r.files, () => `data-cmp-a="${esc(r.a)}" data-cmp-b="${esc(r.b)}"`);
     const cmpCommit = (c) =>
-      `<div class="cmp-commit"><span class="sha" data-goto="${esc(c.sha)}">${esc(c.sha)}</span>${esc(c.subject)}<span class="who">${esc(c.author)} · ${esc(fmtDate(c.time))}</span></div>`;
+      `<div class="cmp-commit" data-goto="${esc(c.sha)}" title="${esc(c.subject)}">` +
+        `<span class="sha mono">${esc(shortSha(c.sha))}</span>` +
+        `<span class="cmp-subj">${esc(c.subject)}</span>` +
+        `<span class="who">${esc(c.author)} · ${esc(fmtDate(c.time))}</span>` +
+      `</div>`;
+    const onlyIn = (label, list) => list.length
+      ? filesSectionHead(label, `${list.length}${list.length >= 50 ? '+' : ''}`, { toggle: false }) +
+        `<div class="cmp-commits">${list.map(cmpCommit).join('')}</div>` : '';
     detail.innerHTML =
-      `<div class="compare-view">` +
-        `<div class="compare-title"><span>Comparing References</span><button id="cmpClose" title="Back to commit details">×</button></div>` +
+      `<div class="d-head">` +
+        `<div class="cmp-title-row">` +
+          `<span class="d-title">Comparing refs</span>` +
+          `<button id="cmpClose" class="icon-btn" title="Back to commit details">×</button>` +
+        `</div>` +
         `<div class="compare-refbar">` +
-          `<select id="cmpSource" class="cmp-ref-select cmp-source" title="Comparison source">${refOptions(r.a, false)}</select>` +
+          `<select id="cmpSource" class="cmp-ref-select cmp-source" title="Base (source)">${refOptions(r.a, false)}</select>` +
           `<button id="cmpSwap" class="swap-button" title="Swap sides"${r.b === 'Working Tree' ? ' disabled' : ''}>⇄</button>` +
-          `<select id="cmpTarget" class="cmp-ref-select cmp-target" title="Comparison target">${refOptions(r.b, true)}</select>` +
+          `<select id="cmpTarget" class="cmp-ref-select cmp-target" title="Target">${refOptions(r.b, true)}</select>` +
         `</div>` +
         `<div class="cmp-counts">` +
-          `<b>${r.behind}</b> only in <code>${esc(r.a)}</code> · ` +
-          `<b>${r.ahead}</b> only in <code>${esc(r.b)}</code>` +
+          `<b>${r.behind}</b> only in <code>${esc(r.a)}</code> · <b>${r.ahead}</b> only in <code>${esc(r.b)}</code>` +
         `</div>` +
-        `<div class="files-changed-head">` +
-          `<span class="files-title">Files changed</span>` +
-          `<span class="file-count">${r.files.length}</span>` +
-          `<span class="stat-add">+${totalAdd}</span>` +
-          `<span class="stat-del">−${totalDel}</span>` +
-          `<span class="files-actions"><button class="toggle-file-mode">${state.fileMode === 'tree' ? '☷' : '🌳'}</button></span>` +
-        `</div>` +
-        `<div class="compare-filter-row"><input class="file-filter" placeholder="Filter files…"><button class="filter-button" title="Filter">≡</button></div>` +
-        `<div class="compare-files">${compareFiles}</div>` +
       `</div>` +
-      (r.onlyInB.length
-        ? `<div class="d-section">Only in ${esc(r.b)} (${r.onlyInB.length}${r.onlyInB.length >= 50 ? '+' : ''})</div>` +
-          r.onlyInB.map(cmpCommit).join('')
-        : '') +
-      (r.onlyInA.length
-        ? `<div class="d-section">Only in ${esc(r.a)} (${r.onlyInA.length}${r.onlyInA.length >= 50 ? '+' : ''})</div>` +
-          r.onlyInA.map(cmpCommit).join('')
-        : '');
-    const swap = document.getElementById('cmpSwap');
+      `<div class="d-scroll">` +
+        filesSectionHead('Files changed', r.files.length, { add: totalAdd, del: totalDel }) +
+        filesFilter() +
+        fileListHtml(r.files, () => ({ attrs: `data-cmp-a="${esc(r.a)}" data-cmp-b="${esc(r.b)}"` })) +
+        onlyIn(`Only in ${r.b}`, r.onlyInB) +
+        onlyIn(`Only in ${r.a}`, r.onlyInA) +
+      `</div>`;
     wireFileControls();
+    const swap = el('cmpSwap');
     if (swap && r.b !== 'Working Tree') swap.onclick = () => post({ type: 'compare', a: r.b, b: r.a });
-    const source = document.getElementById('cmpSource');
-    const target = document.getElementById('cmpTarget');
-    if (source) source.onchange = () => post({ type: 'compare', a: source.value, b: target.value });
-    if (target) target.onchange = () => post({ type: 'compare', a: source.value, b: target.value === 'Working Tree' ? 'WT' : target.value });
-    const close = document.getElementById('cmpClose');
-    if (close) {
-      close.onclick = () => {
-        state.compareMark = null;
-        selectEndpoint(r.a);
-      };
-    }
+    const source = el('cmpSource');
+    const target = el('cmpTarget');
+    const runCompare = () => post({ type: 'compare', a: source.value, b: target.value === 'Working Tree' ? 'WT' : target.value });
+    if (source) source.onchange = runCompare;
+    if (target) target.onchange = runCompare;
+    const close = el('cmpClose');
+    if (close) close.onclick = () => { state.compareMark = null; selectEndpoint(r.a); };
   }
 
   function selectEndpoint(endpoint) {
@@ -577,11 +762,26 @@
     else post({ type: 'select', sha });
   }
 
+  function handleRowAction(action, sha) {
+    switch (action) {
+      case 'compareWorking': post({ type: 'compare', a: sha, b: 'WT' }); break;
+      case 'cherryPick': post({ type: 'action', action: 'cherryPick', args: { sha } }); break;
+      case 'copySha': post({ type: 'copy', text: sha }); break;
+      case 'stash': post({ type: 'action', action: 'stashSave', args: {} }); break;
+    }
+  }
+
   rowsBody.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     const tr = e.target.closest('tr.commit-row');
     if (!tr) return;
     const sha = tr.dataset.sha;
+    const rowAct = e.target.closest('[data-row-act]');
+    if (rowAct) {
+      e.stopPropagation();
+      handleRowAction(rowAct.dataset.rowAct, sha);
+      return;
+    }
     if (e.ctrlKey || e.metaKey) {
       // ctrl-click: compare with previously selected commit
       const other = state.compareMark || state.selected;
@@ -763,6 +963,8 @@
         case 'amendCommit': post({ type: 'action', action: 'commit', args: { message: el('commitMessage').value.trim(), amend: true } }); break;
         case 'signCommit': post({ type: 'action', action: 'commit', args: { message: el('commitMessage').value, sign: true } }); break;
         case 'compareBase': post({ type: 'compare', a: state.defaultCompareRef, b: 'WT' }); break;
+        case 'compareWorking': post({ type: 'compare', a: sha, b: 'WT' }); break;
+        case 'refresh': post({ type: 'reload', scope: state.scope }); break;
         case 'openTerminal': post({ type: 'openTerminal' }); break;
         case 'copySha': post({ type: 'copy', text: sha }); break;
         case 'resetMenu': {
@@ -794,7 +996,7 @@
       if (d.cmpA) {
         post({ type: 'openFileDiff', sha: d.cmpB, base: d.cmpA, workingTree: d.cmpB === 'Working Tree', filePath: d.path, origPath: d.orig || undefined, status: d.status });
       } else if (d.wt) {
-        post({ type: 'openFileDiff', workingTree: true, filePath: d.path, origPath: d.orig || undefined, status: d.status });
+        post({ type: 'openFileDiff', workingTree: true, staged: d.staged === '1', untracked: d.untracked === '1', filePath: d.path, origPath: d.orig || undefined, status: d.status });
       } else {
         post({ type: 'openFileDiff', sha: d.sha, filePath: d.path, origPath: d.orig || undefined, status: d.status });
       }
@@ -900,6 +1102,11 @@
         // keep selection if the commit is still present
         if (state.selected && !state.commits.some((c) => c.sha === state.selected) && state.selected !== 'WT') {
           state.selected = null;
+        }
+        // keep the working-tree detail in sync after refreshes (e.g. after
+        // staging/discarding, or an external file change)
+        if (state.selected === 'WT' && state.lastDetails && state.lastDetails.workingTree) {
+          post({ type: 'selectWorkingTree' });
         }
         break;
       }
