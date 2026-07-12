@@ -1,0 +1,362 @@
+{
+  "name": "git-tree",
+  "displayName": "GitTree",
+  "description": "A GitLens-style commit graph with colorful branch lanes, rich commit/branch details, diffs, compare, inline blame, and full branch/stash/tag management.",
+  "version": "0.0.1",
+  "publisher": "pennowtech",
+  "author": {
+    "name": "Sukhdeep Singh"
+  },
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pennowtech/vscode-git-tree.git"
+  },
+  "keywords": [
+    "git",
+    "graph",
+    "gitlens",
+    "commit graph",
+    "branches",
+    "blame",
+    "diff",
+    "history",
+    "compare"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "galleryBanner": {
+    "color": "#1f6feb",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "GitTree requires a local or remote filesystem repository and the Git CLI."
+    },
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "GitTree runs Git commands for the active repository. Trust the workspace before enabling it."
+    }
+  },
+  "main": "./src/extension.js",
+  "scripts": {
+    "test": "node test/run-tests.js",
+    "test:syntax": "node test/run-tests.js --syntax-only",
+    "test:unit": "node test/run-tests.js --unit-only",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.2"
+  },
+  "contributes": {
+    "commands": [
+      { "command": "gitTree.showGraph", "title": "Show Commit Graph", "icon": "$(git-branch)" },
+      { "command": "gitTree.openUserGuide", "title": "Open User Guide", "icon": "$(book)" },
+      { "command": "gitTree.refresh", "title": "Refresh", "icon": "$(refresh)" },
+      { "command": "gitTree.fetch", "title": "Fetch", "icon": "$(cloud-download)" },
+      { "command": "gitTree.pull", "title": "Pull", "icon": "$(arrow-down)" },
+      { "command": "gitTree.push", "title": "Push", "icon": "$(arrow-up)" },
+      { "command": "gitTree.fetchBranch", "title": "Fetch Branch", "icon": "$(cloud-download)" },
+      { "command": "gitTree.pullBranch", "title": "Pull Branch", "icon": "$(arrow-down)" },
+      { "command": "gitTree.pushBranch", "title": "Push Branch", "icon": "$(arrow-up)" },
+      { "command": "gitTree.createBranch", "title": "Create Branch…", "icon": "$(add)" },
+      { "command": "gitTree.checkoutBranch", "title": "Switch Branch", "icon": "$(arrow-swap)" },
+      { "command": "gitTree.mergeBranch", "title": "Merge into Current Branch", "icon": "$(git-merge)" },
+      { "command": "gitTree.rebaseOntoBranch", "title": "Rebase Current Branch onto This" },
+      { "command": "gitTree.deleteBranch", "title": "Delete Branch…", "icon": "$(trash)" },
+      { "command": "gitTree.renameBranch", "title": "Rename Branch…" },
+      { "command": "gitTree.compareWithCurrent", "title": "Compare with Working Changes" },
+      { "command": "gitTree.compareRefs", "title": "Compare Two Refs…", "icon": "$(diff)" },
+      { "command": "gitTree.selectForCompare", "title": "Select for Compare", "icon": "$(git-compare)" },
+      { "command": "gitTree.compareWithSelected", "title": "Compare with Selected", "icon": "$(compare-changes)" },
+      { "command": "gitTree.openRefChanges", "title": "Open Changes", "icon": "$(files)" },
+      { "command": "gitTree.openBranchOnRemote", "title": "Open Branch on Remote", "icon": "$(link-external)" },
+      { "command": "gitTree.createTagAtBranch", "title": "Create Tag at Branch…", "icon": "$(tag)" },
+      { "command": "gitTree.cherryPickCommit", "title": "Cherry-pick Commit", "icon": "$(check)" },
+      { "command": "gitTree.revertCommit", "title": "Revert Commit…", "icon": "$(discard)" },
+      { "command": "gitTree.createBranchAtCommit", "title": "Create Branch at Commit…", "icon": "$(git-branch)" },
+      { "command": "gitTree.createTagAtCommit", "title": "Create Tag at Commit…", "icon": "$(tag)" },
+      { "command": "gitTree.checkoutCommit", "title": "Checkout Commit (Detached)", "icon": "$(debug-step-back)" },
+      { "command": "gitTree.copyCommitSha", "title": "Copy Commit ID", "icon": "$(copy)" },
+      { "command": "gitTree.copyRefName", "title": "Copy Name" },
+      { "command": "gitTree.stashSave", "title": "Stash Changes…", "icon": "$(archive)" },
+      { "command": "gitTree.stashApply", "title": "Apply Stash", "icon": "$(reply)" },
+      { "command": "gitTree.stashPop", "title": "Pop Stash" },
+      { "command": "gitTree.stashDrop", "title": "Drop Stash…", "icon": "$(trash)" },
+      { "command": "gitTree.createTag", "title": "Create Tag…", "icon": "$(add)" },
+      { "command": "gitTree.deleteTag", "title": "Delete Tag…", "icon": "$(trash)" },
+      { "command": "gitTree.checkoutTag", "title": "Checkout Tag (Detached)" },
+      { "command": "gitTree.fileHistory", "title": "File History", "icon": "$(history)" },
+      { "command": "gitTree.toggleBlame", "title": "Toggle Inline Blame" },
+      { "command": "gitTree.commit", "title": "Commit Staged Changes…", "icon": "$(check)" },
+      { "command": "gitTree.stageAll", "title": "Stage All Changes", "icon": "$(add)" },
+      { "command": "gitTree.unstageAll", "title": "Unstage All Changes", "icon": "$(remove)" },
+      { "command": "gitTree.stageChange", "title": "Stage Change", "icon": "$(add)" },
+      { "command": "gitTree.unstageChange", "title": "Unstage Change", "icon": "$(remove)" },
+      { "command": "gitTree.discardChange", "title": "Discard Changes…", "icon": "$(discard)" },
+      { "command": "gitTree.openChange", "title": "Open Changes" },
+      { "command": "gitTree.openChangeFile", "title": "Open File", "icon": "$(go-to-file)" },
+      { "command": "gitTree.revealChangeInExplorer", "title": "Reveal in Explorer", "icon": "$(folder-opened)" },
+      { "command": "gitTree.copyChangePath", "title": "Copy Path", "icon": "$(copy)" },
+      { "command": "gitTree.copyChangeRelativePath", "title": "Copy Relative Path", "icon": "$(copy)" }
+      ,{ "command": "gitTree.addToGitignore", "title": "Add to .gitignore", "icon": "$(exclude)" }
+      ,{ "command": "gitTree.setCommitMessage", "title": "Set Commit Message…", "icon": "$(edit)" }
+      ,{ "command": "gitTree.showCommit", "title": "Show Commit in Graph", "icon": "$(eye)" }
+      ,{ "command": "gitTree.amendCommit", "title": "Amend Last Commit", "icon": "$(git-commit)" }
+      ,{ "command": "gitTree.signCommit", "title": "Sign and Commit…", "icon": "$(verified-filled)" }
+      ,{ "command": "gitTree.interactiveRebase", "title": "Interactive Rebase…", "icon": "$(list-ordered)" }
+      ,{ "command": "gitTree.rebaseContinue", "title": "Continue Rebase", "icon": "$(debug-continue)" }
+      ,{ "command": "gitTree.rebaseSkip", "title": "Skip Rebase Commit", "icon": "$(debug-step-over)" }
+      ,{ "command": "gitTree.rebaseAbort", "title": "Abort Rebase", "icon": "$(debug-stop)" }
+      ,{ "command": "gitTree.toggleBlameHeatmap", "title": "Toggle Full-file Blame Heatmap" }
+      ,{ "command": "gitTree.updateSubmodules", "title": "Update/Initialize Submodules", "icon": "$(sync)" }
+      ,{ "command": "gitTree.openPullRequests", "title": "Open Pull Requests", "icon": "$(git-pull-request)" }
+      ,{ "command": "gitTree.createPullRequest", "title": "Create Pull/Merge Request…", "icon": "$(git-pull-request-create)" }
+      ,{ "command": "gitTree.syncSubmodules", "title": "Synchronize Submodule URLs", "icon": "$(sync)" }
+      ,{ "command": "gitTree.addWorktree", "title": "Add Worktree…", "icon": "$(add)" }
+      ,{ "command": "gitTree.removeWorktree", "title": "Remove Worktree…", "icon": "$(trash)" }
+      ,{ "command": "gitTree.pruneWorktrees", "title": "Prune Stale Worktrees", "icon": "$(clear-all)" }
+      ,{ "command": "gitTree.lockWorktree", "title": "Lock Worktree", "icon": "$(lock)" }
+      ,{ "command": "gitTree.unlockWorktree", "title": "Unlock Worktree", "icon": "$(unlock)" }
+      ,{ "command": "gitTree.openWorktree", "title": "Open Worktree in New Window", "icon": "$(link-external)" }
+      ,{ "command": "gitTree.openSubmodule", "title": "Open Submodule in New Window", "icon": "$(link-external)" }
+      ,{ "command": "gitTree.openPullRequest", "title": "Open Pull/Merge Request", "icon": "$(link-external)" }
+      ,{ "command": "gitTree.openPullRequestDetails", "title": "Open Pull/Merge Request Details", "icon": "$(preview)" }
+      ,{ "command": "gitTree.openPullRequestWeb", "title": "Open Pull/Merge Request in Browser", "icon": "$(link-external)" }
+      ,{ "command": "gitTree.setGitLabToken", "title": "Set GitLab Token Securely…", "icon": "$(key)" }
+      ,{ "command": "gitTree.setAzureDevOpsToken", "title": "Set Azure DevOps Token Securely…", "icon": "$(key)" }
+      ,{ "command": "gitTree.showHistory", "title": "Git History", "icon": "$(history)" }
+      ,{ "command": "gitTree.addRemote", "title": "Add Remote URL…", "icon": "$(remote-explorer)" }
+      ,{ "command": "gitTree.setRemoteUrl", "title": "Change Remote URL…", "icon": "$(remote)" }
+      ,{ "command": "gitTree.filterCommitsByAuthor", "title": "Filter Commits by Author…", "icon": "$(filter)" }
+      ,{ "command": "gitTree.clearCommitAuthorFilter", "title": "Clear Commit Author Filter", "icon": "$(clear-all)" }
+      ,{ "command": "gitTree.changesViewList", "title": "View as List", "icon": "$(list-flat)" }
+      ,{ "command": "gitTree.changesViewTree", "title": "View as Tree", "icon": "$(list-tree)" }
+      ,{ "command": "gitTree.changesSortPath", "title": "Sort by Path" }
+      ,{ "command": "gitTree.changesSortName", "title": "Sort by Name" }
+      ,{ "command": "gitTree.changesSortStatus", "title": "Sort by Status" }
+      ,{ "command": "gitTree.stashAdvanced", "title": "Stash Options…", "icon": "$(archive)" }
+      ,{ "command": "gitTree.stashView", "title": "View Stash", "icon": "$(preview)" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitTree",
+          "title": "GitTree",
+          "icon": "resources/gittree.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitTree": [
+        { "id": "gitTree.commitInput", "name": "Commit", "type": "webview", "icon": "$(edit)" },
+        { "id": "gitTree.changes", "name": "Changes", "icon": "$(files)" },
+        { "id": "gitTree.branches", "name": "Branches", "icon": "$(git-branch)" },
+        { "id": "gitTree.stashes", "name": "Stashes", "icon": "$(archive)" },
+        { "id": "gitTree.tags", "name": "Tags", "icon": "$(tag)" }
+        ,{ "id": "gitTree.worktrees", "name": "Worktrees", "icon": "$(repo)" }
+        ,{ "id": "gitTree.submodules", "name": "Submodules", "icon": "$(repo-clone)" }
+        ,{ "id": "gitTree.pullRequests", "name": "Pull Requests", "icon": "$(git-pull-request)" }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        { "command": "gitTree.openUserGuide", "when": "view == gitTree.changes", "group": "navigation@99" },
+        { "command": "gitTree.openUserGuide", "when": "view == gitTree.branches", "group": "navigation@99" },
+        { "command": "gitTree.openUserGuide", "when": "view == gitTree.pullRequests", "group": "navigation@99" },
+        { "command": "gitTree.commit", "when": "view == gitTree.changes", "group": "navigation@1" },
+        { "command": "gitTree.stageAll", "when": "view == gitTree.changes", "group": "navigation@2" },
+        { "command": "gitTree.stashAdvanced", "when": "view == gitTree.changes", "group": "navigation@3" },
+        { "command": "gitTree.showGraph", "when": "view == gitTree.changes", "group": "navigation@4" },
+        { "command": "gitTree.showHistory", "when": "view == gitTree.changes", "group": "navigation@5" },
+        { "command": "gitTree.refresh", "when": "view == gitTree.changes", "group": "navigation@6" },
+        { "command": "gitTree.changesViewList", "when": "view == gitTree.changes", "group": "2_view@1" },
+        { "command": "gitTree.changesViewTree", "when": "view == gitTree.changes", "group": "2_view@2" },
+        { "command": "gitTree.changesSortPath", "when": "view == gitTree.changes", "group": "3_sort@1" },
+        { "command": "gitTree.changesSortName", "when": "view == gitTree.changes", "group": "3_sort@2" },
+        { "command": "gitTree.changesSortStatus", "when": "view == gitTree.changes", "group": "3_sort@3" },
+        { "command": "gitTree.amendCommit", "when": "view == gitTree.changes", "group": "1_commit@1" },
+        { "command": "gitTree.signCommit", "when": "view == gitTree.changes", "group": "1_commit@2" },
+        { "command": "gitTree.showGraph", "when": "view == gitTree.branches", "group": "navigation@1" },
+        { "command": "gitTree.createBranch", "when": "view == gitTree.branches", "group": "navigation@2" },
+        { "command": "gitTree.fetch", "when": "view == gitTree.branches", "group": "navigation@3" },
+        { "command": "gitTree.refresh", "when": "view == gitTree.branches", "group": "navigation@4" },
+        { "command": "gitTree.pull", "when": "view == gitTree.branches", "group": "1_sync@1" },
+        { "command": "gitTree.push", "when": "view == gitTree.branches", "group": "1_sync@2" },
+        { "command": "gitTree.compareRefs", "when": "view == gitTree.branches", "group": "2_actions@1" },
+        { "command": "gitTree.addRemote", "when": "view == gitTree.branches", "group": "4_more@1" },
+        { "command": "gitTree.setRemoteUrl", "when": "view == gitTree.branches", "group": "4_more@2" },
+        { "command": "gitTree.filterCommitsByAuthor", "when": "view == gitTree.branches", "group": "4_more@3" },
+        { "command": "gitTree.clearCommitAuthorFilter", "when": "view == gitTree.branches", "group": "4_more@4" },
+        { "command": "gitTree.stashSave", "when": "view == gitTree.stashes", "group": "navigation@1" },
+        { "command": "gitTree.refresh", "when": "view == gitTree.stashes", "group": "navigation@2" },
+        { "command": "gitTree.createTag", "when": "view == gitTree.tags", "group": "navigation@1" },
+        { "command": "gitTree.refresh", "when": "view == gitTree.tags", "group": "navigation@2" }
+        ,{ "command": "gitTree.updateSubmodules", "when": "view == gitTree.submodules", "group": "navigation@1" }
+        ,{ "command": "gitTree.openPullRequests", "when": "view == gitTree.branches", "group": "2_actions@2" }
+        ,{ "command": "gitTree.rebaseContinue", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@1" }
+        ,{ "command": "gitTree.rebaseSkip", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@2" }
+        ,{ "command": "gitTree.rebaseAbort", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@3" }
+        ,{ "command": "gitTree.addWorktree", "when": "view == gitTree.worktrees", "group": "navigation@1" }
+        ,{ "command": "gitTree.pruneWorktrees", "when": "view == gitTree.worktrees", "group": "navigation@2" }
+        ,{ "command": "gitTree.syncSubmodules", "when": "view == gitTree.submodules", "group": "navigation@2" }
+        ,{ "command": "gitTree.createPullRequest", "when": "view == gitTree.pullRequests", "group": "navigation@1" }
+        ,{ "command": "gitTree.refresh", "when": "view == gitTree.pullRequests", "group": "navigation@2" }
+        ,{ "command": "gitTree.setGitLabToken", "when": "view == gitTree.pullRequests", "group": "1_auth@1" }
+        ,{ "command": "gitTree.setAzureDevOpsToken", "when": "view == gitTree.pullRequests", "group": "1_auth@2" }
+      ],
+      "view/item/context": [
+        { "command": "gitTree.stageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "inline@1" },
+        { "command": "gitTree.stageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "1_actions@1" },
+        { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "inline@1" },
+        { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "1_actions@1" },
+        { "command": "gitTree.discardChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "2_danger@1" },
+        { "command": "gitTree.openChangeFile", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged)/", "group": "3_file@1" },
+        { "command": "gitTree.revealChangeInExplorer", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "3_file@2" },
+        { "command": "gitTree.copyChangePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@1" },
+        { "command": "gitTree.copyChangeRelativePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@2" },
+        { "command": "gitTree.addToGitignore", "when": "view == gitTree.changes && viewItem == gitTree.changeWorking.U", "group": "3_file@3" },
+        { "command": "gitTree.stageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.working", "group": "1_actions@1" },
+        { "command": "gitTree.unstageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.staged", "group": "1_actions@1" },
+        { "command": "gitTree.checkoutBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "inline@1" },
+        { "command": "gitTree.pullBranch", "when": "view == gitTree.branches && viewItem == gitTree.branchCurrent", "group": "inline@1" },
+        { "command": "gitTree.pushBranch", "when": "view == gitTree.branches && viewItem == gitTree.branchCurrent", "group": "inline@2" },
+        { "command": "gitTree.mergeBranch", "when": "view == gitTree.branches && viewItem == gitTree.branch", "group": "inline@2" },
+        { "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "inline@3" },
+        { "command": "gitTree.deleteBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "inline@4" },
+        { "command": "gitTree.checkoutBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "1_actions@1" },
+        { "command": "gitTree.pullBranch", "when": "view == gitTree.branches && viewItem == gitTree.branchCurrent", "group": "1_sync@1" },
+        { "command": "gitTree.pushBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent)", "group": "1_sync@2" },
+        { "command": "gitTree.fetchBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "1_sync@3" },
+        { "command": "gitTree.mergeBranch", "when": "view == gitTree.branches && viewItem == gitTree.branch", "group": "1_actions@2" },
+        { "command": "gitTree.rebaseOntoBranch", "when": "view == gitTree.branches && viewItem == gitTree.branch", "group": "1_actions@3" },
+        { "command": "gitTree.compareWithCurrent", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "2_compare@1" },
+        { "command": "gitTree.selectForCompare", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "2_compare@2" },
+        { "command": "gitTree.compareWithSelected", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "2_compare@3" },
+        { "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "2_compare@4" },
+        { "command": "gitTree.createPullRequest", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent)", "group": "3_remote@1" },
+        { "command": "gitTree.openBranchOnRemote", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "3_remote@2" },
+        { "command": "gitTree.createTagAtBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "3_modify@1" },
+        { "command": "gitTree.renameBranch", "when": "view == gitTree.branches && viewItem == gitTree.branch", "group": "3_modify@2" },
+        { "command": "gitTree.deleteBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "3_modify@3" },
+        { "command": "gitTree.copyRefName", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchCurrent || viewItem == gitTree.branchRemote)", "group": "4_copy@1" },
+        { "command": "gitTree.stashApply", "when": "view == gitTree.stashes && viewItem == gitTree.stash", "group": "inline@1" },
+        { "command": "gitTree.stashApply", "when": "view == gitTree.stashes && viewItem == gitTree.stash", "group": "1_actions@1" },
+        { "command": "gitTree.stashPop", "when": "view == gitTree.stashes && viewItem == gitTree.stash", "group": "1_actions@2" },
+        { "command": "gitTree.stashDrop", "when": "view == gitTree.stashes && viewItem == gitTree.stash", "group": "1_actions@3" },
+        { "command": "gitTree.stashView", "when": "view == gitTree.stashes && viewItem == gitTree.stash", "group": "1_actions@4" },
+        { "command": "gitTree.checkoutTag", "when": "view == gitTree.tags && viewItem == gitTree.tag", "group": "1_actions@1" },
+        { "command": "gitTree.compareWithCurrent", "when": "view == gitTree.tags && viewItem == gitTree.tag", "group": "1_actions@2" },
+        { "command": "gitTree.deleteTag", "when": "view == gitTree.tags && viewItem == gitTree.tag", "group": "2_modify@1" },
+        { "command": "gitTree.copyRefName", "when": "view == gitTree.tags && viewItem == gitTree.tag", "group": "3_copy@1" }
+        ,{ "command": "gitTree.showCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@1" }
+        ,{ "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@2" }
+        ,{ "command": "gitTree.cherryPickCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@3" }
+        ,{ "command": "gitTree.copyCommitSha", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "inline@4" }
+        ,{ "command": "gitTree.openRefChanges", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "1_commit@1" }
+        ,{ "command": "gitTree.selectForCompare", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "1_commit@2" }
+        ,{ "command": "gitTree.compareWithSelected", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "1_commit@3" }
+        ,{ "command": "gitTree.cherryPickCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "2_commit@1" }
+        ,{ "command": "gitTree.revertCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "2_commit@2" }
+        ,{ "command": "gitTree.createBranchAtCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "3_commit@1" }
+        ,{ "command": "gitTree.createTagAtCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "3_commit@2" }
+        ,{ "command": "gitTree.checkoutCommit", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "3_commit@3" }
+        ,{ "command": "gitTree.copyCommitSha", "when": "view == gitTree.branches && viewItem == gitTree.commit", "group": "4_commit@1" }
+        ,{ "command": "gitTree.interactiveRebase", "when": "view == gitTree.branches && viewItem == gitTree.branch", "group": "1_actions@4" }
+        ,{ "command": "gitTree.openWorktree", "when": "view == gitTree.worktrees && viewItem =~ /gitTree\\.worktree/", "group": "inline@1" }
+        ,{ "command": "gitTree.removeWorktree", "when": "view == gitTree.worktrees && viewItem =~ /gitTree\\.worktree/", "group": "2_modify@1" }
+        ,{ "command": "gitTree.lockWorktree", "when": "view == gitTree.worktrees && viewItem == gitTree.worktree", "group": "1_actions@1" }
+        ,{ "command": "gitTree.unlockWorktree", "when": "view == gitTree.worktrees && viewItem == gitTree.worktreeLocked", "group": "1_actions@2" }
+        ,{ "command": "gitTree.openSubmodule", "when": "view == gitTree.submodules && viewItem == gitTree.submodule", "group": "inline@1" }
+        ,{ "command": "gitTree.openPullRequestDetails", "when": "view == gitTree.pullRequests && viewItem == gitTree.pullRequest", "group": "inline@1" }
+        ,{ "command": "gitTree.openPullRequestWeb", "when": "view == gitTree.pullRequests && viewItem == gitTree.pullRequest", "group": "1_actions@1" }
+      ],
+      "editor/title/context": [
+        { "command": "gitTree.fileHistory", "group": "1_gittree@1" }
+      ],
+      "explorer/context": [
+        { "command": "gitTree.fileHistory", "group": "7_modification@10" },
+        { "command": "gitTree.addToGitignore", "when": "resourceScheme == file", "group": "7_modification@11" }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "gitTree.showGraph",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g"
+      }
+    ],
+    "configuration": {
+      "title": "GitTree",
+      "properties": {
+        "gitTree.maxCommits": {
+          "type": "number",
+          "default": 500,
+          "description": "Maximum number of commits to load in the graph."
+        },
+        "gitTree.showRemoteBranches": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include remote branches in the commit graph."
+        },
+        "gitTree.blame.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline blame annotation for the current line."
+        },
+        "gitTree.dateFormat": {
+          "type": "string",
+          "enum": ["relative", "absolute"],
+          "default": "relative",
+          "description": "How commit dates are displayed in the graph."
+        },
+        "gitTree.azureDevOps.repositoryUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional full Azure DevOps repository URL used for PRs. Example: https://dev.azure.com/my-org/my-project/_git/my-repo. Takes precedence over the split Azure DevOps settings below."
+        },
+        "gitTree.azureDevOps.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Azure DevOps base endpoint/collection URL. Examples: https://dev.azure.com, https://dev.azure.com/my-org, https://my-server/tfs/my-collection, or https://my-org.visualstudio.com."
+        },
+        "gitTree.azureDevOps.organization": {
+          "type": "string",
+          "default": "",
+          "description": "Azure DevOps organization name. Used with gitTree.azureDevOps.endpoint when the endpoint does not already include the organization/collection."
+        },
+        "gitTree.azureDevOps.project": {
+          "type": "string",
+          "default": "",
+          "description": "Azure DevOps project name used when gitTree.azureDevOps.repositoryUrl is not set."
+        },
+        "gitTree.azureDevOps.repository": {
+          "type": "string",
+          "default": "",
+          "description": "Azure DevOps repository name or ID used when gitTree.azureDevOps.repositoryUrl is not set."
+        }
+      }
+    },
+    "colors": [
+      { "id": "gitTree.blameHeat0", "description": "Old blame lines.", "defaults": { "dark": "#23863612", "light": "#2da44e12" } },
+      { "id": "gitTree.blameHeat1", "description": "Older blame lines.", "defaults": { "dark": "#2386361f", "light": "#2da44e1f" } },
+      { "id": "gitTree.blameHeat2", "description": "Recent blame lines.", "defaults": { "dark": "#d2992226", "light": "#bf870026" } },
+      { "id": "gitTree.blameHeat3", "description": "Newer blame lines.", "defaults": { "dark": "#db6d2830", "light": "#bc4c0030" } },
+      { "id": "gitTree.blameHeat4", "description": "Newest blame lines.", "defaults": { "dark": "#f8514938", "light": "#cf222e38" } }
+    ]
+  }
+}
