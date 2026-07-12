@@ -293,7 +293,9 @@
       f.additions != null || f.deletions != null
         ? `<span class="file-stats"><span class="stat-add">+${f.additions ?? 0}</span> <span class="stat-del">−${f.deletions ?? 0}</span></span>`
         : '';
-    const rename = f.origPath ? ` title="${esc(f.origPath)} → ${esc(f.path)}"` : '';
+    const tooltip = f.origPath ? `${f.origPath} → ${f.path}` : f.path;
+    const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    const iconClass = fileIconClass(name, extension);
     const workingActions = String(extra || '').includes('data-wt=')
       ? `<span class="file-actions">` +
         (f.staged
@@ -305,15 +307,35 @@
         `<button data-file-act="discard" title="Discard changes">↶</button></span>`
       : '';
     return (
-      `<div class="file-row tree-row status-${esc(f.status)}" style="--depth:${depth}" data-path="${esc(f.path)}" data-orig="${esc(f.origPath || '')}" data-status="${esc(f.status)}" ${extra || ''}${rename}>` +
-        `<span class="tree-spacer"></span>` +
-        `<span class="file-status fs-${esc(f.status)}">${esc(f.status)}</span>` +
+      `<div class="file-row tree-row status-${esc(f.status)}" style="--depth:${depth}" data-path="${esc(f.path)}" data-orig="${esc(f.origPath || '')}" data-status="${esc(f.status)}" title="${esc(tooltip)}" ${extra || ''}>` +
+        `<span class="file-chevron-spacer" aria-hidden="true"></span>` +
+        `<span class="file-icon ${iconClass}" aria-hidden="true"></span>` +
         `<span class="file-name">${esc(name)}</span>` +
         `<span class="file-dir">${esc(dir)}</span>` +
         stats +
         workingActions +
+        `<span class="file-status fs-${esc(f.status)}" title="${esc(statusLabel(f.status))}">${esc(f.status)}</span>` +
       `</div>`
     );
+  }
+
+  function statusLabel(status) {
+    return ({ A: 'Added', U: 'Untracked', M: 'Modified', D: 'Deleted', R: 'Renamed', C: 'Conflicted' })[status] || status;
+  }
+
+  function fileIconClass(name, extension) {
+    if (/^(package(-lock)?|tsconfig|jsconfig)\.json$/i.test(name)) return 'icon-json';
+    if (/^(readme|changelog|license)(\.|$)/i.test(name)) return 'icon-doc';
+    if (['js', 'jsx', 'mjs', 'cjs'].includes(extension)) return 'icon-js';
+    if (['ts', 'tsx'].includes(extension)) return 'icon-ts';
+    if (['json', 'jsonc'].includes(extension)) return 'icon-json';
+    if (['md', 'mdx', 'txt', 'rst'].includes(extension)) return 'icon-doc';
+    if (['html', 'htm', 'xml', 'svg'].includes(extension)) return 'icon-markup';
+    if (['css', 'scss', 'sass', 'less'].includes(extension)) return 'icon-style';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp'].includes(extension)) return 'icon-image';
+    if (['yml', 'yaml', 'toml', 'ini', 'env'].includes(extension)) return 'icon-config';
+    if (['sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd'].includes(extension)) return 'icon-terminal';
+    return 'icon-file';
   }
 
   function fileListHtml(files, extraFor) {
@@ -333,9 +355,12 @@
     }
     const renderNode = (node, depth) => {
       const folders = [...node.folders.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, child]) =>
-        `<details class="file-folder" open>` +
-          `<summary class="tree-row folder-row" style="--depth:${depth}"><span class="folder-icon"></span><span class="tree-name">${esc(name)}</span></summary>` +
-          renderNode(child, depth + 1) +
+        `<details class="file-folder" data-depth="${depth}" open>` +
+          `<summary class="tree-row folder-row" style="--depth:${depth}" title="${esc(name)}">` +
+            `<span class="folder-chevron" aria-hidden="true"></span><span class="folder-icon" aria-hidden="true"></span>` +
+            `<span class="tree-name">${esc(name)}</span>` +
+          `</summary>` +
+          `<div class="tree-children">${renderNode(child, depth + 1)}</div>` +
         `</details>`
       ).join('');
       const leaves = node.files
@@ -369,10 +394,17 @@
 
   function wireFileControls() {
     const input = detail.querySelector('.file-filter');
-    if (input) input.oninput = () => detail.querySelectorAll('.file-row').forEach((row) => {
-      row.closest('[style*="padding-left"]')?.toggleAttribute('hidden', !row.dataset.path.toLowerCase().includes(input.value.toLowerCase()));
-      row.hidden = !row.dataset.path.toLowerCase().includes(input.value.toLowerCase());
-    });
+    if (input) input.oninput = () => {
+      const query = input.value.trim().toLowerCase();
+      detail.querySelectorAll('.file-row').forEach((row) => {
+        row.hidden = Boolean(query) && !row.dataset.path.toLowerCase().includes(query);
+      });
+      [...detail.querySelectorAll('.file-folder')].reverse().forEach((folder) => {
+        const hasMatch = [...folder.querySelectorAll('.file-row')].some((row) => !row.hidden);
+        folder.hidden = Boolean(query) && !hasMatch;
+        if (query && hasMatch) folder.open = true;
+      });
+    };
     const toggle = detail.querySelector('.toggle-file-mode');
     if (toggle) toggle.onclick = () => {
       state.fileMode = state.fileMode === 'tree' ? 'list' : 'tree';
@@ -748,6 +780,8 @@
     }
     const fileRow = e.target.closest('.file-row');
     if (fileRow) {
+      detail.querySelectorAll('.file-row.is-selected').forEach((row) => row.classList.remove('is-selected'));
+      fileRow.classList.add('is-selected');
       const d = fileRow.dataset;
       const fileAction = e.target.closest('[data-file-act]');
       if (fileAction) {

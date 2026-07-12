@@ -451,6 +451,11 @@ class Git {
   fetch() { return this.exec(['fetch', '--all', '--prune']); }
   pull() { return this.exec(['pull']); }
   push() { return this.exec(['push']); }
+  fetchBranch(remote, branch) { return this.exec(['fetch', remote, branch, '--prune']); }
+  pullBranch(remote, branch) { return this.exec(['pull', remote, branch]); }
+  pushBranch(remote, branch, setUpstream = false) {
+    return this.exec(['push', ...(setUpstream ? ['--set-upstream'] : []), remote, branch]);
+  }
   addRemote(name, url) { return this.exec(['remote', 'add', name, url]); }
   setRemoteUrl(name, url) { return this.exec(['remote', 'set-url', name, url]); }
   stage(filePath) { return this.exec(['add', '--', filePath]); }

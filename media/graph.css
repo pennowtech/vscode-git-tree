@@ -146,6 +146,7 @@ tr.wt-row { font-style: italic; }
 /* ref chips */
 .chip {
   display: inline-block;
+  max-width: 190px;
   padding: 0 7px;
   margin-right: 4px;
   border-radius: 9px;
@@ -157,6 +158,9 @@ tr.wt-row { font-style: italic; }
   background: color-mix(in srgb, var(--ref-color, var(--vscode-textLink-foreground)) 14%, transparent);
   border-color: var(--ref-color, var(--vscode-textLink-foreground));
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chip-tag { background: transparent; }
 .chip-remote { opacity: 0.75; }
@@ -219,33 +223,37 @@ tr.wt-row { font-style: italic; }
 .file-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 6px;
-  padding-left: calc(8px + (var(--depth, 0) * 24px));
-  border-radius: 3px;
+  gap: 5px;
+  padding: 0 10px 0 8px;
+  padding-left: calc(8px + (var(--depth, 0) * 16px));
+  border-radius: 0;
   cursor: pointer;
   min-width: 0;
-  border-left: 2px solid transparent;
 }
 .file-row:hover { background: var(--vscode-list-hoverBackground); }
+.file-row.is-selected {
+  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--vscode-list-activeSelectionBackground);
+}
 .file-status {
-  flex: 0 0 16px;
-  font-weight: 700;
+  flex: 0 0 auto;
+  min-width: 14px;
+  margin-left: 5px;
+  font-weight: 600;
   font-family: var(--vscode-editor-font-family);
-  text-align: center;
+  text-align: right;
 }
 .fs-A, .fs-U { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); }
 .fs-M { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
 .fs-D { color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39); }
 .fs-R, .fs-C { color: var(--vscode-gitDecoration-renamedResourceForeground, #73c991); }
-.status-A, .status-U { border-left-color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); }
-.status-M { border-left-color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
-.status-D { border-left-color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39); }
+.status-A .file-name, .status-U .file-name { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); }
+.status-M .file-name { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
 .status-D .file-name { color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39); text-decoration: line-through; }
-.status-R, .status-C { border-left-color: var(--vscode-gitDecoration-renamedResourceForeground, #73c991); }
-.tree-spacer {
-  width: 14px;
-  flex: 0 0 14px;
+.status-R .file-name, .status-C .file-name { color: var(--vscode-gitDecoration-renamedResourceForeground, #73c991); }
+.file-chevron-spacer {
+  width: 12px;
+  flex: 0 0 12px;
 }
 .folder-icon {
   width: 16px;
@@ -260,10 +268,73 @@ tr.wt-row { font-style: italic; }
   width: 14px;
   height: 10px;
   margin: 4px 1px 0;
-  border-radius: 2px;
-  background: var(--vscode-symbolIcon-folderForeground, #dcb67a);
+  border: 1.5px solid var(--vscode-symbolIcon-folderForeground, #dcb67a);
+  border-radius: 1px;
+  background: transparent;
 }
-.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.folder-icon::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 6px;
+  height: 3px;
+  border: 1.5px solid var(--vscode-symbolIcon-folderForeground, #dcb67a);
+  border-bottom: 0;
+  border-radius: 1px 1px 0 0;
+}
+.file-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--vscode-icon-foreground, var(--vscode-descriptionForeground));
+}
+.file-icon::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 9px;
+  height: 13px;
+  border: 1.25px solid currentColor;
+  border-radius: 1px;
+}
+.file-icon::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 1px;
+  width: 4px;
+  height: 4px;
+  border-left: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  background: var(--vscode-editor-background);
+}
+.file-row:hover .file-icon::after { background: var(--vscode-list-hoverBackground); }
+.file-row.is-selected .file-icon::after { background: var(--vscode-list-activeSelectionBackground); }
+.icon-js { color: #e8d44d; }
+.icon-ts { color: #519aba; }
+.icon-json, .icon-config { color: #cbcb41; }
+.icon-doc { color: #519aba; }
+.icon-markup { color: #e37933; }
+.icon-style { color: #42a5d5; }
+.icon-image { color: #b180d7; }
+.icon-terminal { color: #89d185; }
+.file-row.status-D .file-icon { color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39); }
+.file-row.status-A .file-icon, .file-row.status-U .file-icon { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); }
+.file-row.status-M .file-icon { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
+.file-row.status-R .file-icon { color: var(--vscode-gitDecoration-renamedResourceForeground, #73c991); }
+.folder-chevron {
+  width: 12px;
+  flex: 0 0 12px;
+  color: var(--vscode-descriptionForeground);
+}
+.folder-chevron::before { content: '▾'; }
+.file-folder:not([open]) > summary .folder-chevron::before { content: '›'; font-size: 18px; line-height: 10px; }
+.file-folder:not([open]) > summary .folder-icon::before { opacity: .82; }
+.tree-children { position: relative; }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
 .file-dir {
   color: var(--vscode-descriptionForeground);
   overflow: hidden;
@@ -414,6 +485,7 @@ tr.wt-row { font-style: italic; }
 .cmp-ref-select option { color: var(--vscode-dropdown-foreground); background: var(--vscode-dropdown-background); font-weight: 400; }
 .file-tree {
   margin-top: 2px;
+  padding: 2px 0 8px;
 }
 .tree-row {
   min-height: 22px;
@@ -424,18 +496,17 @@ tr.wt-row { font-style: italic; }
 .file-folder > summary {
   cursor: pointer;
   color: var(--vscode-descriptionForeground);
-  padding: 3px 6px;
-  padding-left: calc(8px + (var(--depth, 0) * 24px));
+  padding: 0 10px 0 8px;
+  padding-left: calc(8px + (var(--depth, 0) * 16px));
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   list-style: none;
   border-radius: 3px;
 }
 .file-folder > summary:hover { background: var(--vscode-list-hoverBackground); }
 .file-folder > summary::-webkit-details-marker { display: none; }
-.file-folder > summary::before { content: '▾'; width: 12px; color: var(--vscode-descriptionForeground); }
-.file-folder:not([open]) > summary::before { content: '▸'; }
+.file-folder > summary::before { content: none; }
 .cmp-ref {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);

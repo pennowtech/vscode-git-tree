@@ -64,7 +64,17 @@ async function activate(context) {
   context.subscriptions.push(
     vscode.window.registerFileDecorationProvider(changeDecorations),
     changeDecorations,
-    vscode.window.createTreeView('gitTree.branches', { treeDataProvider: providers.branches }),
+    (() => {
+      const tree = vscode.window.createTreeView('gitTree.branches', { treeDataProvider: providers.branches, canSelectMany: true });
+      tree.onDidChangeSelection((event) => {
+        const refs = event.selection.filter((item) => item.branch || item.commit);
+        if (refs.length !== 2) return;
+        const [a, b] = refs.map(itemRef);
+        const panel = GraphPanel.show(context, git);
+        setTimeout(() => panel.post({ type: 'startCompare', a, b }), 300);
+      }, null, context.subscriptions);
+      return tree;
+    })(),
     vscode.window.createTreeView('gitTree.stashes', { treeDataProvider: providers.stashes }),
     vscode.window.createTreeView('gitTree.tags', { treeDataProvider: providers.tags }),
     changesTree,
@@ -107,6 +117,7 @@ async function activate(context) {
         refreshAll();
       })
     );
+  let selectedCompareRef;
 
   register('gitTree.showGraph', () => GraphPanel.show(context, git));
   register('gitTree.showHistory', async () => {
@@ -131,6 +142,19 @@ async function activate(context) {
   register('gitTree.fetch', () => actions.run(git, 'fetch', {}));
   register('gitTree.pull', () => actions.run(git, 'pull', {}));
   register('gitTree.push', () => actions.run(git, 'push', {}));
+  register('gitTree.fetchBranch', async (item) => {
+    const { remote, branch } = branchRemoteParts(item.branch);
+    await git.fetchBranch(remote, branch);
+  });
+  register('gitTree.pullBranch', async (item) => {
+    const { remote, branch } = branchRemoteParts(item.branch);
+    await git.pullBranch(remote, branch);
+  });
+  register('gitTree.pushBranch', async (item) => {
+    const branch = item.branch.name;
+    const remote = item.branch.upstream?.split('/')[0] || 'origin';
+    await git.pushBranch(remote, branch, !item.branch.upstream);
+  });
   register('gitTree.createBranch', () => actions.run(git, 'createBranch', {}));
   register('gitTree.addRemote', async () => {
     const name = await vscode.window.showInputBox({ prompt: 'Remote name', value: 'origin' });
@@ -272,6 +296,13 @@ async function activate(context) {
     if (!url) throw new Error('Origin is not a recognized GitHub, GitLab, or Azure DevOps remote.');
     await vscode.env.openExternal(vscode.Uri.parse(url));
   });
+  register('gitTree.openBranchOnRemote', async (item) => {
+    const remote = await git.getRemoteUrl();
+    const url = providerBranchUrl(remote, item.branch.name, item.branch.remote);
+    if (!url) throw new Error('This remote provider does not expose a recognized branch URL.');
+    await vscode.env.openExternal(vscode.Uri.parse(url));
+  });
+  register('gitTree.createTagAtBranch', (item) => actions.run(git, 'createTag', { sha: item.branch.name }));
 
   // tree-item commands (item is the TreeItem from views.js)
   register('gitTree.checkoutBranch', (item) =>
@@ -292,6 +323,42 @@ async function activate(context) {
     const panel = GraphPanel.show(context, git);
     setTimeout(() => panel.post({ type: 'startCompare', a: ref, b: 'WT' }), 400);
   });
+  register('gitTree.selectForCompare', (item) => {
+    selectedCompareRef = itemRef(item);
+    vscode.window.setStatusBarMessage(`Selected ${selectedCompareRef} for comparison`, 4000);
+  });
+  register('gitTree.compareWithSelected', async (item) => {
+    const ref = itemRef(item);
+    if (!selectedCompareRef) {
+      selectedCompareRef = ref;
+      vscode.window.showInformationMessage(`${ref} selected. Choose another branch or commit and use Compare with Selected.`);
+      return;
+    }
+    if (selectedCompareRef === ref) throw new Error('Select a different branch or commit for comparison.');
+    const panel = GraphPanel.show(context, git);
+    setTimeout(() => panel.post({ type: 'startCompare', a: selectedCompareRef, b: ref }), 400);
+  });
+  register('gitTree.openRefChanges', async (item) => {
+    if (item.commit) {
+      const details = await git.getCommitDetails(item.commit.sha);
+      const base = details.parents[0] || null;
+      return openNativeChanges(item.commit.subject || details.sha.slice(0, 7), base, details.sha, details.files);
+    }
+    const target = item.branch.name;
+    let base = item.branch.upstream || await git.getDefaultCompareRef();
+    if (!base || base === target) base = `${target}^`;
+    const files = await git.getChangedFiles(base, target);
+    return openNativeChanges(target, base, target, files);
+  });
+  register('gitTree.cherryPickCommit', (item) => actions.run(git, 'cherryPick', { sha: item.commit.sha }));
+  register('gitTree.revertCommit', async (item) => {
+    const details = await git.getCommitDetails(item.commit.sha);
+    return actions.run(git, 'revert', { sha: item.commit.sha, isMerge: details.isMerge });
+  });
+  register('gitTree.createBranchAtCommit', (item) => actions.run(git, 'createBranch', { startPoint: item.commit.sha }));
+  register('gitTree.createTagAtCommit', (item) => actions.run(git, 'createTag', { sha: item.commit.sha }));
+  register('gitTree.checkoutCommit', (item) => actions.run(git, 'checkoutDetached', { sha: item.commit.sha }));
+  register('gitTree.copyCommitSha', async (item) => vscode.env.clipboard.writeText(item.commit.sha));
   register('gitTree.showCommit', (item) => {
     const panel = GraphPanel.show(context, git);
     setTimeout(() => panel.post({ type: 'revealCommit', sha: item.commit.sha }), 250);
@@ -411,6 +478,38 @@ function providerCreatePullRequestUrl(remote, source, target) {
   if (root.includes('github.com')) return root.replace(/\/pulls$/, `/compare/${encodeURIComponent(cleanTarget)}...${encodeURIComponent(source)}?expand=1`);
   if (root.includes('gitlab.com')) return root.replace(/-\/merge_requests$/, `-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(source)}&merge_request[target_branch]=${encodeURIComponent(cleanTarget)}`);
   return `${root}?sourceRef=${encodeURIComponent(source)}&targetRef=${encodeURIComponent(cleanTarget)}`;
+}
+
+function itemRef(item) {
+  if (item?.branch) return item.branch.name;
+  if (item?.commit) return item.commit.sha;
+  if (item?.tag) return item.tag.name;
+  throw new Error('No branch, commit, or tag was selected.');
+}
+
+function branchRemoteParts(branch) {
+  if (branch.remote) {
+    const [remote, ...parts] = branch.name.split('/');
+    return { remote, branch: parts.join('/') };
+  }
+  if (branch.upstream) {
+    const [remote, ...parts] = branch.upstream.split('/');
+    return { remote, branch: parts.join('/') };
+  }
+  return { remote: 'origin', branch: branch.name };
+}
+
+function providerBranchUrl(remote, branch, isRemote) {
+  const cleanBranch = isRemote ? branch.split('/').slice(1).join('/') : branch;
+  const hosted = remote.match(/(?:git@|https?:\/\/)(github\.com|gitlab\.com)[/:]([^/]+)\/(.+?)(?:\.git)?$/i);
+  if (hosted) {
+    const repo = hosted[3].replace(/\.git$/, '');
+    return hosted[1].toLowerCase() === 'github.com'
+      ? `https://github.com/${hosted[2]}/${repo}/tree/${encodeURIComponent(cleanBranch)}`
+      : `https://gitlab.com/${hosted[2]}/${repo}/-/tree/${encodeURIComponent(cleanBranch)}`;
+  }
+  const azure = azureConfiguration() || parseAzureRemote(remote);
+  return azure ? `${azure.base}/${encodeURIComponent(azure.project)}/_git/${encodeURIComponent(azure.repo)}?version=GB${encodeURIComponent(cleanBranch)}` : null;
 }
 
 function parseAzureRemote(remote) {
@@ -619,6 +718,29 @@ async function openCompareFile(filePath, compare) {
       ? gitUri(compare.b, filePath, true)
       : gitUri(compare.b, filePath);
   await vscode.commands.executeCommand('vscode.diff', left, right, title, { preview: true });
+}
+
+async function openNativeChanges(label, base, target, files) {
+  const revisionUri = (rev, filePath, empty = false) => vscode.Uri.from({
+    scheme: 'gittree',
+    path: '/' + filePath.replace(/\\/g, '/'),
+    query: JSON.stringify({ repo: git.root, rev, path: filePath, empty })
+  });
+  const resources = files.map((file) => {
+    const display = vscode.Uri.file(path.join(git.root, file.path));
+    const left = file.status === 'A' || !base
+      ? revisionUri(base || target, file.path, true)
+      : revisionUri(base, file.origPath || file.path);
+    const right = file.status === 'D'
+      ? revisionUri(target, file.path, true)
+      : revisionUri(target, file.path);
+    return [display, left, right];
+  });
+  if (!resources.length) {
+    vscode.window.showInformationMessage(`No changes found for ${label}.`);
+    return;
+  }
+  await vscode.commands.executeCommand('vscode.changes', `Changes: ${label}`, resources);
 }
 
 function deactivate() {
