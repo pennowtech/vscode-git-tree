@@ -126,11 +126,14 @@ Available actions include:
 - Reveal in Explorer.
 - Copy Path.
 - Copy Relative Path.
+- Add to `.gitignore` for untracked files.
 - Stage.
 - Unstage.
 - Discard.
 
 Discard asks for confirmation.
+
+You can also right-click a file or folder in VS Code Explorer and select **Add to .gitignore**. GitTree adds a repository-root-relative rule and avoids duplicate entries. Already tracked files remain tracked until removed from the Git index.
 
 ### Change the layout
 

@@ -30,15 +30,18 @@ class PullRequestPanel {
         await openPrFileDiff(message.path, currentDetails);
       }
       if (message.type === 'ready') {
-        const details = await loadDetails(pullRequest, tokens).catch((error) => ({
+        const publish = (details) => {
+          currentDetails = details;
+          panel.webview.postMessage({ type: 'details', details });
+        };
+        const details = await loadDetails(pullRequest, tokens, publish).catch((error) => ({
           ...pullRequest,
           loadError: error.message || String(error),
           files: [],
           comments: [],
           tasks: extractTasks(pullRequest)
         }));
-        currentDetails = details;
-        panel.webview.postMessage({ type: 'details', details });
+        publish(details);
       }
     });
     PullRequestPanel.current = panel;
@@ -144,10 +147,10 @@ function virtualDiffUri(filePath, label, content) {
   });
 }
 
-async function loadDetails(pr, tokens) {
+async function loadDetails(pr, tokens, onProgress) {
   if (pr.provider === 'github' && pr.owner && pr.repo && pr.number) return githubDetails(pr);
   if (pr.provider === 'gitlab' && pr.project && pr.number) return gitlabDetails(pr, tokens.getGitLabToken ? await tokens.getGitLabToken() : undefined);
-  if (pr.provider === 'azure' && pr.baseUrl && pr.project && pr.repo && pr.number) return azureDetails(pr, tokens.getAzureDevOpsToken ? await tokens.getAzureDevOpsToken() : undefined);
+  if (pr.provider === 'azure' && pr.baseUrl && pr.project && pr.repo && pr.number) return azureDetails(pr, tokens.getAzureDevOpsToken ? await tokens.getAzureDevOpsToken() : undefined, onProgress);
   return { ...pr, files: [], comments: [], tasks: extractTasks(pr) };
 }
 
@@ -225,21 +228,47 @@ async function gitlabDetails(pr, token) {
   };
 }
 
-async function azureDetails(pr, token) {
+async function azureDetails(pr, token, onProgress) {
   if (!token) throw new Error('Azure DevOps token is not set. Run "Set Azure DevOps Token Securely..." first.');
   const headers = azureHeaders(token);
   const repo = encodeURIComponent(pr.repo);
   const project = encodeURIComponent(pr.project);
   const base = `${pr.baseUrl}/${project}/_apis/git/repositories/${repo}/pullRequests/${pr.number}`;
-  const [detail, iterations, threads, workItemRefs] = await Promise.all([
-    json(`${base}?api-version=7.1`, headers),
-    json(`${base}/iterations?api-version=7.1`, headers),
-    json(`${base}/threads?api-version=7.1`, headers),
-    json(`${base}/workitems?api-version=7.1`, headers).catch(() => ({ value: [] }))
-  ]);
-  const changes = await azurePullRequestChanges(base, headers, iterations.value || []);
-  const workItems = await azureWorkItems(pr, token, workItemRefs.value || []);
-  let comments = (threads.value || []).flatMap((thread) => {
+  const detailPromise = json(`${base}?api-version=7.1`, headers);
+  const iterationsPromise = json(`${base}/iterations?api-version=7.1`, headers);
+  const threadsPromise = json(`${base}/threads?api-version=7.1`, headers);
+  const workItemRefsPromise = json(`${base}/workitems?api-version=7.1`, headers).catch(() => ({ value: [] }));
+  const changesPromise = iterationsPromise.then((iterations) => azurePullRequestChanges(base, headers, iterations.value || []));
+  const detail = await detailPromise;
+  let comments = [];
+  const baseDetails = {
+    ...pr,
+    body: detail.description || pr.body || '',
+    state: detail.status || pr.state,
+    author: detail.createdBy?.displayName || pr.author,
+    files: [],
+    filesLoading: true,
+    comments,
+    commentsActive: comments.filter((c) => !/\(closed\)|\(fixed\)/i.test(c.type)).length,
+    commentsTotal: comments.length,
+    tasks: extractTasks({ ...pr, body: [detail.description, ...comments.map((c) => c.body)].filter(Boolean).join('\n') })
+  };
+  if (onProgress) onProgress(baseDetails);
+
+  const workItemsPromise = workItemRefsPromise.then((refs) => azureWorkItems(pr, token, refs.value || []));
+  const changes = await changesPromise;
+  const files = azureChangeEntries(changes).map((entry) => ({
+      path: entry.item?.path || entry.changeTrackingId || '(unknown)',
+      status: entry.changeType || 'modified',
+      additions: null,
+      deletions: null,
+      changes: null
+    }));
+  const fileDetails = { ...baseDetails, files, filesLoading: false };
+  if (onProgress) onProgress(fileDetails);
+
+  const threads = await threadsPromise;
+  comments = (threads.value || []).flatMap((thread) => {
     const ctx = thread.threadContext || {};
     const file = ctx.filePath || ctx.rightFileStart?.path || ctx.leftFileStart?.path || '';
     const line = ctx.rightFileStart?.line || ctx.leftFileStart?.line || ctx.line;
@@ -255,19 +284,22 @@ async function azureDetails(pr, token) {
       })
     );
   });
-  comments = await attachAzureCodeSnippets(pr, detail, headers, comments);
+  const commentDetails = {
+    ...fileDetails,
+    comments,
+    commentsActive: comments.filter((c) => !/\(closed\)|\(fixed\)/i.test(c.type)).length,
+    commentsTotal: comments.length,
+    tasks: extractTasks({ ...pr, body: [detail.description, ...comments.map((c) => c.body)].filter(Boolean).join('\n') })
+  };
+  if (onProgress) onProgress(commentDetails);
+
+  const [workItems, enrichedComments] = await Promise.all([
+    workItemsPromise,
+    attachAzureCodeSnippets(pr, detail, headers, comments)
+  ]);
+  comments = enrichedComments;
   return {
-    ...pr,
-    body: detail.description || pr.body || '',
-    state: detail.status || pr.state,
-    author: detail.createdBy?.displayName || pr.author,
-    files: azureChangeEntries(changes).map((entry) => ({
-      path: entry.item?.path || entry.changeTrackingId || '(unknown)',
-      status: entry.changeType || 'modified',
-      additions: null,
-      deletions: null,
-      changes: null
-    })),
+    ...commentDetails,
     comments,
     commentsActive: comments.filter((c) => !/\(closed\)|\(fixed\)/i.test(c.type)).length,
     commentsTotal: comments.length,
@@ -277,11 +309,10 @@ async function azureDetails(pr, token) {
 
 async function azurePullRequestChanges(base, headers, iterations) {
   const sorted = [...iterations].sort((a, b) => (b.id || 0) - (a.id || 0));
-  for (const iteration of sorted) {
-    const changes = await json(`${base}/iterations/${iteration.id}/changes?api-version=7.1`, headers).catch(() => null);
-    if (azureChangeEntries(changes).length) return changes;
-  }
-  return { changeEntries: [] };
+  const latest = sorted[0];
+  if (!latest) return { changeEntries: [] };
+  return json(`${base}/iterations/${latest.id}/changes?$compareTo=0&$top=2000&api-version=7.1`, headers)
+    .catch(() => ({ changeEntries: [] }));
 }
 
 function azureChangeEntries(changes) {
@@ -454,9 +485,9 @@ pre{white-space:pre-wrap;overflow:auto;background:var(--vscode-textCodeBlock-bac
 <script nonce="${nonce}">
 const vscode=acquireVsCodeApi(),initial=${JSON.stringify(pr).replace(/</g, '\\u003c')};let currentPr=initial,activeTab='overview';
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function render(pr){currentPr=pr;const title=pr.number?'#'+pr.number+' '+pr.title:pr.title;const comments=pr.commentsTotal==null?'Comments unavailable':pr.commentsActive+'/'+pr.commentsTotal+' comments';const fileCount=(pr.files||[]).length;document.getElementById('app').innerHTML='<div class="eyebrow">'+esc(pr.provider||'repository')+'</div><h1>'+esc(title)+'</h1><div class="meta"><span class="pill">'+esc(pr.author||'')+'</span><span class="pill">'+esc(pr.source||'')+' -> '+esc(pr.target||'')+'</span><span class="pill">'+esc(pr.state||'open')+'</span><span class="pill">'+esc(comments)+'</span></div><button id="open">Open on web</button>'+(pr.loadError?'<div class="section"><b>'+esc(pr.loadError)+'</b></div>':'')+tabs(fileCount)+'<div id="tab-body">'+tabBody(pr)+'</div>';document.getElementById('open').onclick=()=>vscode.postMessage({type:'open'});document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;render(currentPr)});document.querySelectorAll('.file').forEach(row=>row.onclick=()=>vscode.postMessage({type:'openFile',path:row.dataset.path}));}
-function tabs(fileCount){return '<nav class="tabs"><button class="tab '+(activeTab==='overview'?'active':'')+'" data-tab="overview">Overview</button><button class="tab '+(activeTab==='files'?'active':'')+'" data-tab="files">Files changed '+fileCount+'</button></nav>'}
-function tabBody(pr){if(activeTab==='files')return files(pr.files||[]);return section('Description', '<div class="body markdown">'+md(pr.body||'No description.')+'</div>')+tasks(pr.tasks)+commentsHtml(pr.comments||[])}
+function render(pr){currentPr=pr;const title=pr.number?'#'+pr.number+' '+pr.title:pr.title;const comments=pr.commentsTotal==null?'Comments unavailable':pr.commentsActive+'/'+pr.commentsTotal+' comments';const fileCount=(pr.files||[]).length;document.getElementById('app').innerHTML='<div class="eyebrow">'+esc(pr.provider||'repository')+'</div><h1>'+esc(title)+'</h1><div class="meta"><span class="pill">'+esc(pr.author||'')+'</span><span class="pill">'+esc(pr.source||'')+' -> '+esc(pr.target||'')+'</span><span class="pill">'+esc(pr.state||'open')+'</span><span class="pill">'+esc(comments)+'</span></div><button id="open">Open on web</button>'+(pr.loadError?'<div class="section"><b>'+esc(pr.loadError)+'</b></div>':'')+tabs(fileCount,pr.filesLoading)+'<div id="tab-body">'+tabBody(pr)+'</div>';document.getElementById('open').onclick=()=>vscode.postMessage({type:'open'});document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;render(currentPr)});document.querySelectorAll('.file').forEach(row=>row.onclick=()=>vscode.postMessage({type:'openFile',path:row.dataset.path}));}
+function tabs(fileCount,loading){return '<nav class="tabs"><button class="tab '+(activeTab==='overview'?'active':'')+'" data-tab="overview">Overview</button><button class="tab '+(activeTab==='files'?'active':'')+'" data-tab="files">Files changed '+(loading?'…':fileCount)+'</button></nav>'}
+function tabBody(pr){if(activeTab==='files')return pr.filesLoading?section('Files changed','<div class="muted">Loading changed files…</div>'):files(pr.files||[]);return section('Description', '<div class="body markdown">'+md(pr.body||'No description.')+'</div>')+tasks(pr.tasks)+commentsHtml(pr.comments||[])}
 function section(title,html){return '<section class="section"><h2>'+title+'</h2>'+html+'</section>'}
 function inlineMd(s){const tick=String.fromCharCode(96);return s.replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>').replace(/\\*([^*]+)\\*/g,'<em>$1</em>').replace(new RegExp(tick+'([^'+tick+']+)'+tick,'g'),'<code>$1</code>').replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,'<a href="$2">$1</a>')}
 function md(value){const lines=String(value??'').replace(/\\r\\n/g,'\\n').split('\\n');let html='',list=false;for(const raw of lines){const line=esc(raw).trimEnd();const bullet=line.match(/^\\s*[-*]\\s+(.+)$/);if(bullet){if(!list){html+='<ul>';list=true}html+='<li>'+inlineMd(bullet[1])+'</li>';continue}if(list){html+='</ul>';list=false}if(!line.trim()){continue}const heading=line.match(/^(#{1,3})\\s+(.+)$/);if(heading){html+='<h'+heading[1].length+'>'+inlineMd(heading[2])+'</h'+heading[1].length+'>';continue}html+='<p>'+inlineMd(line)+'</p>'}if(list)html+='</ul>';return html}

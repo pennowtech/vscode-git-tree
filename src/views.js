@@ -344,29 +344,41 @@ class PullRequestsProvider extends BaseProvider {
     super(getGit);
     this.getGitLabToken = getGitLabToken;
     this.getAzureDevOpsToken = getAzureDevOpsToken;
+    this.loadPromise = null;
+    this.lastItems = null;
   }
   async getChildren() {
+    if (this.loadPromise) return this.loadPromise;
+    this.loadPromise = this.loadChildren();
+    try {
+      const items = await this.loadPromise;
+      this.lastItems = items;
+      return items;
+    } catch (error) {
+      if (this.lastItems) return this.lastItems;
+      return [messageItem(`Unable to load requests: ${error.message}`)];
+    } finally {
+      this.loadPromise = null;
+    }
+  }
+  async loadChildren() {
     const git = this.getGit();
     if (!git) return [];
     const remote = await git.getRemoteUrl();
     const configuredAzure = parseAzureConfiguration();
     const info = configuredAzure || parseHostedRemote(remote);
     if (!info) return [messageItem('Origin is not hosted on GitHub, GitLab, or Azure DevOps.')];
-    try {
-      const head = await git.getHead();
-      if (info.provider === 'azure') {
-        const requests = await azurePullRequests(info, await this.getAzureDevOpsToken(), head.branch);
-        if (!requests.length) return [messageItem('No active Azure DevOps pull requests created by the current user.')];
-        return requests.map(pullRequestItem);
-      }
-      const requests = info.provider === 'github'
-        ? await githubPullRequests(info, head.branch)
-        : await gitlabMergeRequests(info, await this.getGitLabToken(), head.branch);
-      if (!requests.length) return [messageItem('No open pull/merge requests created by the current user.')];
+    const head = await git.getHead();
+    if (info.provider === 'azure') {
+      const requests = await azurePullRequests(info, await this.getAzureDevOpsToken(), head.branch);
+      if (!requests.length) return [messageItem('No active Azure DevOps pull requests created by the current user.')];
       return requests.map(pullRequestItem);
-    } catch (error) {
-      return [messageItem(`Unable to load requests: ${error.message}`)];
     }
+    const requests = info.provider === 'github'
+      ? await githubPullRequests(info, head.branch)
+      : await gitlabMergeRequests(info, await this.getGitLabToken(), head.branch);
+    if (!requests.length) return [messageItem('No open pull/merge requests created by the current user.')];
+    return requests.map(pullRequestItem);
   }
 }
 
@@ -483,9 +495,11 @@ function normalizeAzureBaseUrl(endpoint, org) {
 async function azurePullRequests(info, token, branch) {
   if (!token) throw new Error('Azure DevOps token is not set. Run "Set Azure DevOps Token Securely..." first.');
   const headers = azureHeaders(token);
-  const currentUser = await azureCurrentUser(info, headers);
   const url = `${info.baseUrl}/${encodeURIComponent(info.project)}/_apis/git/repositories/${encodeURIComponent(info.repo)}/pullrequests?searchCriteria.status=active&api-version=7.1`;
-  const response = await fetch(url, { headers });
+  const [currentUser, response] = await Promise.all([
+    azureCurrentUser(info, headers),
+    fetchWithRetry(url, { headers })
+  ]);
   if (!response.ok) throw new Error(`Azure DevOps returned ${response.status}`);
   const data = await response.json();
   return (data.value || []).filter((pr) => isAzureCurrentUserPr(pr, currentUser)).map((pr) => ({
@@ -510,7 +524,7 @@ async function azurePullRequests(info, token, branch) {
 }
 
 async function azureCurrentUser(info, headers) {
-  const data = await fetch(`${info.baseUrl}/_apis/connectionData?api-version=7.1-preview.1`, { headers })
+  const data = await fetchWithRetry(`${info.baseUrl}/_apis/connectionData?api-version=7.1-preview.1`, { headers }, 2)
     .then((response) => response.ok ? response.json() : null)
     .catch(() => null);
   return data?.authenticatedUser || null;
@@ -539,10 +553,10 @@ async function githubPullRequests(info, branch) {
   if (session) headers.Authorization = `Bearer ${session.accessToken}`;
   const user = session?.account?.label || session?.account?.id || '';
   const url = `https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/pulls?state=open&per_page=100`;
-  let response = await fetch(url, { headers });
+  let response = await fetchWithRetry(url, { headers });
   if (response.status === 404 && headers.Authorization) {
     const fallbackHeaders = { Accept: headers.Accept, 'User-Agent': headers['User-Agent'] };
-    response = await fetch(url, { headers: fallbackHeaders });
+    response = await fetchWithRetry(url, { headers: fallbackHeaders });
   }
   if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
   return (await response.json()).map((pr) => {
@@ -553,15 +567,43 @@ async function githubPullRequests(info, branch) {
 
 async function gitlabMergeRequests(info, token, branch) {
   const headers = token ? { 'PRIVATE-TOKEN': token } : {};
-  const user = token
-    ? await fetch('https://gitlab.com/api/v4/user', { headers }).then((response) => response.ok ? response.json() : null).catch(() => null)
-    : null;
   const project = encodeURIComponent(`${info.owner}/${info.repo}`);
-  const response = await fetch(`https://gitlab.com/api/v4/projects/${project}/merge_requests?state=opened&per_page=100`, { headers });
+  const [user, response] = await Promise.all([
+    token ? fetchWithRetry('https://gitlab.com/api/v4/user', { headers }, 2).then((result) => result.ok ? result.json() : null).catch(() => null) : null,
+    fetchWithRetry(`https://gitlab.com/api/v4/projects/${project}/merge_requests?state=opened&per_page=100`, { headers })
+  ]);
   if (!response.ok) throw new Error(`GitLab returned ${response.status}`);
   return (await response.json())
     .map((pr) => ({ provider: 'gitlab', owner: info.owner, repo: info.repo, project: `${info.owner}/${info.repo}`, number: pr.iid, title: pr.title, author: pr.author.username, source: pr.source_branch, target: pr.target_branch, currentBranch: branchMatches(pr.source_branch, branch), draft: pr.draft, url: pr.web_url, body: pr.description || '', state: pr.state, commentsActive: pr.user_notes_count, commentsTotal: pr.user_notes_count }))
     .filter((pr) => !user || String(pr.author).toLowerCase() === String(user.username).toLowerCase());
+}
+
+async function fetchWithRetry(url, options = {}, attempts = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      if (!isTransientStatus(response.status) || attempt === attempts - 1) return response;
+      lastError = new Error(`${url} returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+    await delay(300 * (2 ** attempt));
+  }
+  throw lastError || new Error(`Unable to load ${url}`);
+}
+
+function isTransientStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function branchMatches(ref, branch) {

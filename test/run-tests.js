@@ -144,10 +144,15 @@ function testFeatureSurface() {
 
   const sourceChecks = [
     ['src/views.js', /PullRequestsProvider/, 'Pull Requests provider'],
+    ['src/views.js', /fetchWithRetry/, 'Pull Requests transient retry handling'],
+    ['src/views.js', /this\.loadPromise/, 'Pull Requests in-flight load deduplication'],
     ['src/views.js', /ChangesProvider/, 'Changes provider'],
     ['src/views.js', /BranchesProvider/, 'Branches provider'],
     ['src/prPanel.js', /vscode\.diff/, 'PR file diff opening'],
     ['src/prPanel.js', /azurePullRequestChanges/, 'Azure PR changes fallback'],
+    ['src/prPanel.js', /\$compareTo=0&\$top=2000/, 'Azure cumulative latest-iteration file loading'],
+    ['src/prPanel.js', /filesLoading/, 'Progressive PR file loading state'],
+    ['src/prPanel.js', /onProgress/, 'Progressive Azure PR detail updates'],
     ['src/graphPanel.js', /GraphPanel/, 'Commit graph panel'],
     ['src/blame.js', /BlameController/, 'Inline blame controller'],
     ['src/commitView.js', /CommitViewProvider/, 'Commit input webview']

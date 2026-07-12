@@ -113,6 +113,7 @@
       { "command": "gitTree.revealChangeInExplorer", "title": "Reveal in Explorer", "icon": "$(folder-opened)" },
       { "command": "gitTree.copyChangePath", "title": "Copy Path", "icon": "$(copy)" },
       { "command": "gitTree.copyChangeRelativePath", "title": "Copy Relative Path", "icon": "$(copy)" }
+      ,{ "command": "gitTree.addToGitignore", "title": "Add to .gitignore", "icon": "$(exclude)" }
       ,{ "command": "gitTree.setCommitMessage", "title": "Set Commit Message…", "icon": "$(edit)" }
       ,{ "command": "gitTree.showCommit", "title": "Show Commit in Graph", "icon": "$(eye)" }
       ,{ "command": "gitTree.amendCommit", "title": "Amend Last Commit", "icon": "$(git-commit)" }
@@ -228,6 +229,7 @@
         { "command": "gitTree.revealChangeInExplorer", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "3_file@2" },
         { "command": "gitTree.copyChangePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@1" },
         { "command": "gitTree.copyChangeRelativePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@2" },
+        { "command": "gitTree.addToGitignore", "when": "view == gitTree.changes && viewItem == gitTree.changeWorking.U", "group": "3_file@3" },
         { "command": "gitTree.stageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.working", "group": "1_actions@1" },
         { "command": "gitTree.unstageAll", "when": "view == gitTree.changes && viewItem == gitTree.changeGroup.staged", "group": "1_actions@1" },
         { "command": "gitTree.checkoutBranch", "when": "view == gitTree.branches && (viewItem == gitTree.branch || viewItem == gitTree.branchRemote)", "group": "inline@1" },
@@ -287,7 +289,8 @@
         { "command": "gitTree.fileHistory", "group": "1_gittree@1" }
       ],
       "explorer/context": [
-        { "command": "gitTree.fileHistory", "group": "7_modification@10" }
+        { "command": "gitTree.fileHistory", "group": "7_modification@10" },
+        { "command": "gitTree.addToGitignore", "when": "resourceScheme == file", "group": "7_modification@11" }
       ]
     },
     "keybindings": [

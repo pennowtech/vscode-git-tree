@@ -399,6 +399,7 @@ async function activate(context) {
   register('gitTree.revealChangeInExplorer', async (item) => revealChangeInExplorer(item));
   register('gitTree.copyChangePath', async (item) => copyChangePath(item, false));
   register('gitTree.copyChangeRelativePath', async (item) => copyChangePath(item, true));
+  register('gitTree.addToGitignore', async (itemOrUri) => addToGitignore(itemOrUri));
 
   register('gitTree.fileHistory', async (uri) => {
     const target = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
@@ -699,6 +700,38 @@ async function copyChangePath(item, relative) {
   if (!value) return;
   await vscode.env.clipboard.writeText(value);
   vscode.window.setStatusBarMessage(`Copied ${relative ? 'relative path' : 'path'}: ${value}`, 2500);
+}
+
+async function addToGitignore(itemOrUri) {
+  const target = itemOrUri instanceof vscode.Uri
+    ? itemOrUri.fsPath
+    : changeAbsolutePath(itemOrUri);
+  if (!target) throw new Error('Select a file or folder inside the repository.');
+  const relative = path.relative(git.root, target).replace(/\\/g, '/');
+  if (!relative || relative === '.' || relative.startsWith('../') || path.isAbsolute(relative)) {
+    throw new Error('The selected path is outside the active repository.');
+  }
+  const isDirectory = fs.existsSync(target) && fs.statSync(target).isDirectory();
+  const rule = `/${relative}${isDirectory ? '/' : ''}`;
+  const ignorePath = path.join(git.root, '.gitignore');
+  const existing = fs.existsSync(ignorePath) ? fs.readFileSync(ignorePath, 'utf8') : '';
+  const normalizedRule = normalizeIgnoreRule(rule);
+  const alreadyIgnored = existing.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('!'))
+    .some((line) => normalizeIgnoreRule(line) === normalizedRule);
+  if (alreadyIgnored) {
+    vscode.window.showInformationMessage(`${relative} is already listed in .gitignore.`);
+    return;
+  }
+  const eol = existing.includes('\r\n') ? '\r\n' : '\n';
+  const prefix = existing && !existing.endsWith('\n') ? eol : '';
+  fs.writeFileSync(ignorePath, `${existing}${prefix}${rule}${eol}`, 'utf8');
+  vscode.window.setStatusBarMessage(`Added ${rule} to .gitignore`, 4000);
+}
+
+function normalizeIgnoreRule(rule) {
+  return String(rule || '').trim().replace(/^\//, '').replace(/\/$/, '');
 }
 
 async function openCompareFile(filePath, compare) {
