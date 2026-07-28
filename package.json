@@ -2,7 +2,7 @@
   "name": "git-tree",
   "displayName": "GitTree",
   "description": "A GitLens-style commit graph with colorful branch lanes, rich commit/branch details, diffs, compare, inline blame, and full branch/stash/tag management.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "pennowtech",
   "author": {
     "name": "Sukhdeep Singh"

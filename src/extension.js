@@ -16,6 +16,7 @@ const actions = require('./actions');
 let git;
 let statusBarItem;
 let gitWatcher;
+let workingTreeWatcher;
 let providers = {};
 let extensionContext;
 
@@ -96,6 +97,8 @@ async function activate(context) {
 
   // --- react to repo changes (.git/HEAD, refs, index)
   setupGitWatcher(context);
+  setupWorkingTreeWatcher(context);
+  providers.changes.refresh();
 
   // --- commands ------------------------------------------------------------
   const register = (id, fn) =>
@@ -416,7 +419,11 @@ async function activate(context) {
   });
 
   context.subscriptions.push(
-    vscode.workspace.onDidChangeWorkspaceFolders(() => discoverRepo().then(refreshAll))
+    vscode.workspace.onDidChangeWorkspaceFolders(() => discoverRepo().then(() => {
+      setupGitWatcher(context);
+      setupWorkingTreeWatcher(context);
+      refreshAll();
+    }))
   );
 }
 
@@ -608,6 +615,7 @@ async function updateStatusBar() {
 }
 
 let watchDebounce;
+let workingTreeDebounce;
 function setupGitWatcher(context) {
   if (gitWatcher) {
     gitWatcher.close();
@@ -635,6 +643,31 @@ function setupGitWatcher(context) {
   } catch (e) {
     /* fs.watch can fail on some file systems; refresh stays manual */
   }
+}
+
+function setupWorkingTreeWatcher(context) {
+  if (workingTreeWatcher) {
+    workingTreeWatcher.dispose();
+    workingTreeWatcher = undefined;
+  }
+  if (!git) return;
+
+  workingTreeWatcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(git.root, '**/*')
+  );
+  const scheduleRefresh = (uri) => {
+    const relative = path.relative(git.root, uri.fsPath).replace(/\\/g, '/');
+    if (!relative || relative === '.git' || relative.startsWith('.git/')) return;
+    clearTimeout(workingTreeDebounce);
+    workingTreeDebounce = setTimeout(() => {
+      providers.changes && providers.changes.refresh();
+      if (GraphPanel.current) GraphPanel.current.refresh();
+    }, 300);
+  };
+  workingTreeWatcher.onDidCreate(scheduleRefresh);
+  workingTreeWatcher.onDidChange(scheduleRefresh);
+  workingTreeWatcher.onDidDelete(scheduleRefresh);
+  context.subscriptions.push(workingTreeWatcher);
 }
 
 async function pickableRefs() {
@@ -782,6 +815,9 @@ async function openNativeChanges(label, base, target, files) {
 
 function deactivate() {
   if (gitWatcher) gitWatcher.close();
+  if (workingTreeWatcher) workingTreeWatcher.dispose();
+  clearTimeout(watchDebounce);
+  clearTimeout(workingTreeDebounce);
 }
 
 module.exports = { activate, deactivate };
