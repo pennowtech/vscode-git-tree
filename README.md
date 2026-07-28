@@ -44,6 +44,17 @@ GitTree is a workspace extension. In WSL, SSH, Dev Containers, or Codespaces, in
 
 The status-bar branch item also opens the commit graph.
 
+## Hiding VS Code's built-in Source Control view
+
+GitTree runs Git commands through the `git` executable and does not depend on VS Code's built-in Git extension. If you prefer to use only the GitTree Activity Bar interface, the recommended option is to hide the built-in **Source Control** icon:
+
+1. Right-click the VS Code Activity Bar.
+2. Clear **Source Control** in the context menu.
+
+This changes only the layout. VS Code's Git integration remains active and GitTree continues to work normally.
+
+The built-in **Git** extension can also be disabled globally or for one workspace from the Extensions view by searching for `@builtin git`. GitTree will continue to work because it uses the Git CLI directly. Disabling built-in Git also removes VS Code's native SCM features, including Source Control integration, editor gutter change indicators, merge-conflict support, and Git-powered Timeline information, so hiding the icon is usually the better choice. See the VS Code documentation for [Source Control](https://code.visualstudio.com/docs/sourcecontrol/overview) and [disabling extensions](https://code.visualstudio.com/docs/configure/extensions/extension-marketplace#_disable-an-extension).
+
 ## Commit graph
 
 The graph renders commits and merge topology using colored SVG lanes. It includes:
