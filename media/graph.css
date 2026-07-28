@@ -111,11 +111,19 @@ td.cell-msg { position: relative; }
   align-items: center;
   gap: 1px;
   padding-left: 20px;
-  background: linear-gradient(to right, transparent, var(--vscode-list-hoverBackground) 18px);
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--lane-color) 10%, var(--vscode-list-hoverBackground)) 18px
+  );
 }
 tr.commit-row:hover .row-actions { display: flex; }
 tr.commit-row.selected:hover .row-actions {
-  background: linear-gradient(to right, transparent, var(--vscode-list-activeSelectionBackground) 18px);
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--lane-color) 10%, var(--vscode-list-activeSelectionBackground)) 18px
+  );
 }
 .row-actions button {
   border: 0;
@@ -144,10 +152,24 @@ td.cell-author, td.cell-date, td.cell-sha {
 }
 td.cell-sha { font-family: var(--vscode-editor-font-family); }
 
-tr.commit-row { cursor: pointer; }
-tr.commit-row:hover { background: var(--vscode-list-hoverBackground); }
+tr.commit-row {
+  cursor: pointer;
+  background-color: var(--vscode-editor-background);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--lane-color) 10%, transparent),
+    color-mix(in srgb, var(--lane-color) 10%, transparent)
+  );
+}
+tr.commit-row td {
+  border-bottom: 1px solid color-mix(
+    in srgb,
+    var(--lane-color) 18%,
+    var(--vscode-panel-border)
+  );
+}
+tr.commit-row:hover { background-color: var(--vscode-list-hoverBackground); }
 tr.commit-row.selected {
-  background: var(--vscode-list-activeSelectionBackground);
+  background-color: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
 tr.commit-row.selected td.cell-author,
@@ -159,19 +181,40 @@ tr.commit-row.compare-endpoint {
 }
 tr.commit-row.compare-left {
   --compare-accent: var(--vscode-charts-blue, #3794ff);
-  background: color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 14%, transparent);
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--lane-color) 10%, transparent),
+      color-mix(in srgb, var(--lane-color) 10%, transparent)
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 14%, transparent),
+      color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 14%, transparent)
+    );
 }
 tr.commit-row.compare-right {
   --compare-accent: var(--vscode-charts-green, #89d185);
-  background: color-mix(in srgb, var(--vscode-charts-green, #89d185) 16%, transparent);
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--lane-color) 10%, transparent),
+      color-mix(in srgb, var(--lane-color) 10%, transparent)
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--vscode-charts-green, #89d185) 16%, transparent),
+      color-mix(in srgb, var(--vscode-charts-green, #89d185) 16%, transparent)
+    );
 }
 tr.commit-row.compare-both {
   --compare-accent: var(--vscode-charts-purple, #b180d7);
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 18%, transparent),
-    color-mix(in srgb, var(--vscode-charts-green, #89d185) 18%, transparent)
-  );
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--lane-color) 10%, transparent),
+      color-mix(in srgb, var(--lane-color) 10%, transparent)
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 18%, transparent),
+      color-mix(in srgb, var(--vscode-charts-green, #89d185) 18%, transparent)
+    );
 }
 tr.commit-row.dimmed { opacity: 0.35; }
 tr.commit-row.head-row td.cell-msg .msg-text { font-weight: 700; }
@@ -189,14 +232,13 @@ tr.wt-row { font-style: italic; }
   vertical-align: 1px;
   border: 1px solid transparent;
   color: var(--ref-color, var(--vscode-textLink-foreground));
-  background: color-mix(in srgb, var(--ref-color, var(--vscode-textLink-foreground)) 14%, transparent);
+  background: var(--vscode-editor-background);
   border-color: var(--ref-color, var(--vscode-textLink-foreground));
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chip-tag { background: transparent; }
 .chip-remote { opacity: 0.75; }
 .chip .head-star { font-weight: 700; }
 

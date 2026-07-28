@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.3
+
+- Tint complete commit rows with their primary branch-lane color in light and dark themes.
+- Add subtle lane-colored dividers between commit rows.
+- Keep branch and tag capsules readable with neutral theme backgrounds and colored outlines.
+
 ## 0.0.1
 
 Initial release.

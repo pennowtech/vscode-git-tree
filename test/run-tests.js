@@ -154,6 +154,10 @@ function testFeatureSurface() {
     ['src/prPanel.js', /filesLoading/, 'Progressive PR file loading state'],
     ['src/prPanel.js', /onProgress/, 'Progressive Azure PR detail updates'],
     ['src/graphPanel.js', /GraphPanel/, 'Commit graph panel'],
+    ['media/graph.js', /style="--lane-color:\$\{laneColor\}"/, 'Commit row lane color'],
+    ['media/graph.css', /var\(--lane-color\) 10%/, 'Theme-aware commit row lane tint'],
+    ['media/graph.css', /border-bottom: 1px solid color-mix/, 'Lane-aware commit row dividers'],
+    ['media/graph.css', /\.chip\s*\{[\s\S]*?background: var\(--vscode-editor-background\);/, 'Neutral reference pills'],
     ['src/blame.js', /BlameController/, 'Inline blame controller'],
     ['src/commitView.js', /CommitViewProvider/, 'Commit input webview']
   ];

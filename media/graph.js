@@ -264,8 +264,9 @@
       const msg = isWT
         ? `<span class="msg-text">● Uncommitted changes (${state.statusCount} file${state.statusCount > 1 ? 's' : ''})</span>`
         : `<span class="msg-text">${c.signature === 'G' ? '✓ ' : c.signature === 'B' ? '⚠ ' : ''}${esc(c.subject)}</span>`;
+      const laneColor = PALETTE[row.colorIdx % PALETTE.length];
       html.push(
-        `<tr class="${cls}" data-sha="${esc(c.sha)}">` +
+        `<tr class="${cls}" data-sha="${esc(c.sha)}" style="--lane-color:${laneColor}">` +
           `<td class="cell-refs">${isWT ? '' : refChips(c, row.colorIdx)}</td>` +
           `<td class="cell-graph">${rowSvg(row, laneCount, isWT)}</td>` +
           `<td class="cell-msg" title="${esc(c.subject)}">${msg}${rowActions(isWT)}</td>` +
