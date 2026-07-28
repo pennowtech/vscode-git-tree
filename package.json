@@ -163,8 +163,8 @@
     },
     "views": {
       "gitTree": [
-        { "id": "gitTree.commitInput", "name": "Commit", "type": "webview", "icon": "$(edit)" },
         { "id": "gitTree.changes", "name": "Changes", "icon": "$(files)" },
+        { "id": "gitTree.commitInput", "name": "Commit", "type": "webview", "icon": "$(edit)" },
         { "id": "gitTree.branches", "name": "Branches", "icon": "$(git-branch)" },
         { "id": "gitTree.stashes", "name": "Stashes", "icon": "$(archive)" },
         { "id": "gitTree.tags", "name": "Tags", "icon": "$(tag)" }
