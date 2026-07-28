@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.4
+
+- Replace the Activity Bar icon with a larger, theme-aware Git wordmark.
+- Document how to hide or disable VS Code's built-in Source Control integration.
+- Ship a fresh extension version so updated views, icons, and per-file untracked counts load without stale v0.0.3 caches.
+
 ## 0.0.3
 
 - Tint complete commit rows with their primary branch-lane color in light and dark themes.
