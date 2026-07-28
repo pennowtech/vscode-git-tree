@@ -201,13 +201,28 @@ class ChangesProvider extends BaseProvider {
     this.viewMode = 'tree';
     this.sortBy = 'path';
   }
+  async updateStatus() {
+    const git = this.getGit();
+    if (!git) {
+      this.onCount(0);
+      return { files: [], count: 0 };
+    }
+    const status = await git.getStatus();
+    this.decorations.update(git.root, status.files);
+    this.onCount(status.count);
+    return status;
+  }
+  refresh() {
+    super.refresh();
+    // Tree data is resolved lazily by VS Code. Update the badge separately so
+    // it remains current even while the Changes view is collapsed or hidden.
+    this.updateStatus().catch(() => {});
+  }
   async getChildren(element) {
     const git = this.getGit();
     if (!git) return [];
     if (!element) {
-      const status = await git.getStatus();
-      this.decorations.update(git.root, status.files);
-      this.onCount(status.count);
+      const status = await this.updateStatus();
       const staged = status.files.filter((f) => f.x !== ' ' && f.x !== '?');
       const working = status.files.filter((f) => f.y !== ' ' || f.x === '?');
       return [
