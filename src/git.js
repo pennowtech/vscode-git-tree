@@ -6,6 +6,7 @@ const path = require('path');
 
 const SEP = '\x1f'; // unit separator, safe inside pretty formats
 const REC = '\x1e'; // record separator
+let gitExecutable = 'git';
 
 class GitError extends Error {
   constructor(message, args) {
@@ -16,6 +17,10 @@ class GitError extends Error {
 }
 
 class Git {
+  static setExecutable(executable) {
+    gitExecutable = executable || 'git';
+  }
+
   /** @param {string} repoRoot absolute path to the repository root */
   constructor(repoRoot) {
     this.root = repoRoot;
@@ -24,7 +29,7 @@ class Git {
   exec(args, opts = {}) {
     return new Promise((resolve, reject) => {
       cp.execFile(
-        'git',
+        gitExecutable,
         args,
         { cwd: this.root, maxBuffer: 64 * 1024 * 1024, windowsHide: true, ...opts },
         (err, stdout, stderr) => {
@@ -42,7 +47,7 @@ class Git {
   static async discover(dir) {
     return new Promise((resolve) => {
       cp.execFile(
-        'git',
+        gitExecutable,
         ['rev-parse', '--show-toplevel'],
         { cwd: dir, windowsHide: true },
         (err, stdout) => resolve(err ? null : stdout.trim())

@@ -22,6 +22,7 @@ let extensionContext;
 
 async function activate(context) {
   extensionContext = context;
+  await configureGitExecutable();
   await discoverRepo();
 
   // --- content provider that serves file contents at a git revision (for diffs)
@@ -391,6 +392,8 @@ async function activate(context) {
   register('gitTree.deleteTag', (item) => actions.run(git, 'deleteTag', { name: item.tag.name }));
   register('gitTree.stageChange', (item) => actions.run(git, 'stage', { path: item.file.path }));
   register('gitTree.unstageChange', (item) => actions.run(git, 'unstage', { path: item.file.path }));
+  register('gitTree.stageFolder', (item) => actions.run(git, 'stage', { path: item.changePrefix.join('/') }));
+  register('gitTree.unstageFolder', (item) => actions.run(git, 'unstage', { path: item.changePrefix.join('/') }));
   register('gitTree.discardChange', (item) => actions.run(git, 'discard', {
     path: item.file.path,
     untracked: item.file.x === '?'
@@ -423,8 +426,30 @@ async function activate(context) {
       setupGitWatcher(context);
       setupWorkingTreeWatcher(context);
       refreshAll();
-    }))
+    })),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration('git.path')) return;
+      configureGitExecutable().then(() => discoverRepo()).then(() => {
+        setupGitWatcher(context);
+        setupWorkingTreeWatcher(context);
+        refreshAll();
+      });
+    })
   );
+}
+
+async function configureGitExecutable() {
+  let executable;
+  try {
+    const extension = vscode.extensions.getExtension('vscode.git');
+    const exports = extension && (extension.isActive ? extension.exports : await extension.activate());
+    executable = exports?.getAPI?.(1)?.git?.path;
+  } catch (_) {}
+  if (!executable) {
+    const configured = vscode.workspace.getConfiguration('git').get('path');
+    executable = Array.isArray(configured) ? configured[0] : configured;
+  }
+  Git.setExecutable(executable || 'git');
 }
 
 async function discoverRepo() {

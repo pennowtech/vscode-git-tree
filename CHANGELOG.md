@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.5
+
+- Separate staged and unstaged files into clearly labeled, collapsible groups in the Changes view.
+- Give staged and unstaged group headers distinct status-colored icons and index/working-tree markers.
+- Add one-click stage and unstage actions to folder rows in the Changes tree.
+- Reuse VS Code's discovered Git executable so Changes still load when `git` is not on the extension host PATH.
+
 ## 0.0.4
 
 - Replace the Activity Bar icon with a larger, theme-aware Git wordmark.

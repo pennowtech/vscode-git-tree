@@ -227,7 +227,7 @@ class ChangesProvider extends BaseProvider {
       const working = status.files.filter((f) => f.y !== ' ' || f.x === '?');
       return [
         changeGroup('Staged Changes', 'staged', staged, true),
-        ...changeLevel(sortChanges(working, this.sortBy), false, [], this.viewMode, git)
+        changeGroup('Unstaged Changes', 'working', sortChanges(working, this.sortBy), false)
       ].filter(Boolean);
     }
     if (element.changeFolder) {
@@ -253,7 +253,7 @@ function changeLevel(files, staged, prefix, viewMode, git) {
     item.resourceUri = vscode.Uri.file(require('path').join(git.root, ...item.changePrefix));
     item.files = files.filter((f) => item.changePrefix.every((part, i) => f.path.split('/')[i] === part));
     item.staged = staged;
-    item.contextValue = 'gitTree.changeFolder';
+    item.contextValue = staged ? 'gitTree.changeFolderStaged' : 'gitTree.changeFolderWorking';
     return item;
   }).concat(leaves);
 }
@@ -634,7 +634,13 @@ function changeGroup(label, id, files, staged) {
   item.contextValue = `gitTree.changeGroup.${id}`;
   item.files = files;
   item.staged = staged;
-  item.iconPath = new vscode.ThemeIcon(staged ? 'checklist' : 'files');
+  item.description = staged ? 'INDEX' : 'WORKING TREE';
+  item.iconPath = new vscode.ThemeIcon(
+    staged ? 'pass-filled' : 'edit',
+    new vscode.ThemeColor(staged
+      ? 'gitDecoration.stageModifiedResourceForeground'
+      : 'gitDecoration.modifiedResourceForeground')
+  );
   return item;
 }
 

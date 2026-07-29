@@ -2,7 +2,7 @@
   "name": "git-tree",
   "displayName": "GitTree",
   "description": "A GitLens-style commit graph with colorful branch lanes, rich commit/branch details, diffs, compare, inline blame, and full branch/stash/tag management.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "pennowtech",
   "author": {
     "name": "Sukhdeep Singh"
@@ -107,6 +107,8 @@
       { "command": "gitTree.unstageAll", "title": "Unstage All Changes", "icon": "$(remove)" },
       { "command": "gitTree.stageChange", "title": "Stage Change", "icon": "$(add)" },
       { "command": "gitTree.unstageChange", "title": "Unstage Change", "icon": "$(remove)" },
+      { "command": "gitTree.stageFolder", "title": "Stage All Changes in Folder", "icon": "$(add)" },
+      { "command": "gitTree.unstageFolder", "title": "Unstage All Changes in Folder", "icon": "$(remove)" },
       { "command": "gitTree.discardChange", "title": "Discard Changes…", "icon": "$(discard)" },
       { "command": "gitTree.openChange", "title": "Open Changes" },
       { "command": "gitTree.openChangeFile", "title": "Open File", "icon": "$(go-to-file)" },
@@ -224,6 +226,10 @@
         { "command": "gitTree.stageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "1_actions@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "inline@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "1_actions@1" },
+        { "command": "gitTree.stageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "inline@1" },
+        { "command": "gitTree.stageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "1_actions@1" },
+        { "command": "gitTree.unstageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderStaged", "group": "inline@1" },
+        { "command": "gitTree.unstageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderStaged", "group": "1_actions@1" },
         { "command": "gitTree.discardChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "2_danger@1" },
         { "command": "gitTree.openChangeFile", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged)/", "group": "3_file@1" },
         { "command": "gitTree.revealChangeInExplorer", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "3_file@2" },
