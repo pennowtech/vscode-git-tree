@@ -53,6 +53,10 @@ function testManifestCommands() {
   for (const command of menuCommands) {
     assert(commandIds.includes(command), `Menu references a non-contributed command: ${command}`);
   }
+  const changeMenus = pkg.contributes.menus?.['view/item/context'] || [];
+  assert(changeMenus.some((item) => item.command === 'gitTree.discardChange' && item.group === 'inline@2'), 'Discard hover action missing from changed files.');
+  assert(changeMenus.some((item) => item.command === 'gitTree.discardChange' && item.group === '2_danger@1'), 'Discard context-menu action missing from changed files.');
+  assert(changeMenus.some((item) => item.command === 'gitTree.addToGitignore' && item.when?.includes('gitTree.changeWorking.U')), 'Add to .gitignore context-menu action missing from untracked files.');
   console.log(`✓ verified ${commandIds.length} commands and ${menuCommands.length} menu entries`);
 }
 

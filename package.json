@@ -223,6 +223,7 @@
       ],
       "view/item/context": [
         { "command": "gitTree.stageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "inline@1" },
+        { "command": "gitTree.discardChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "inline@2" },
         { "command": "gitTree.stageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "1_actions@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "inline@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "1_actions@1" },

@@ -6,6 +6,7 @@
 - Give staged and unstaged group headers distinct status-colored icons and index/working-tree markers.
 - Add one-click stage and unstage actions to folder rows in the Changes tree.
 - Reuse VS Code's discovered Git executable so Changes still load when `git` is not on the extension host PATH.
+- Show a confirmed Discard Changes button beside Stage on hover while retaining discard and .gitignore context-menu actions.
 
 ## 0.0.4
 
