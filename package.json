@@ -2,7 +2,7 @@
   "name": "git-tree",
   "displayName": "GitTree",
   "description": "A GitLens-style commit graph with colorful branch lanes, rich commit/branch details, diffs, compare, inline blame, and full branch/stash/tag management.",
-  "version": "0.0.5",
+  "version": "0.1.0",
   "publisher": "pennowtech",
   "author": {
     "name": "Sukhdeep Singh"
@@ -124,6 +124,7 @@
       ,{ "command": "gitTree.rebaseContinue", "title": "Continue Rebase", "icon": "$(debug-continue)" }
       ,{ "command": "gitTree.rebaseSkip", "title": "Skip Rebase Commit", "icon": "$(debug-step-over)" }
       ,{ "command": "gitTree.rebaseAbort", "title": "Abort Rebase", "icon": "$(debug-stop)" }
+      ,{ "command": "gitTree.mergeAbort", "title": "Abort Merge", "icon": "$(debug-stop)" }
       ,{ "command": "gitTree.toggleBlameHeatmap", "title": "Toggle Full-file Blame Heatmap" }
       ,{ "command": "gitTree.updateSubmodules", "title": "Update/Initialize Submodules", "icon": "$(sync)" }
       ,{ "command": "gitTree.openPullRequests", "title": "Open Pull Requests", "icon": "$(git-pull-request)" }
@@ -210,9 +211,10 @@
         { "command": "gitTree.refresh", "when": "view == gitTree.tags", "group": "navigation@2" }
         ,{ "command": "gitTree.updateSubmodules", "when": "view == gitTree.submodules", "group": "navigation@1" }
         ,{ "command": "gitTree.openPullRequests", "when": "view == gitTree.branches", "group": "2_actions@2" }
-        ,{ "command": "gitTree.rebaseContinue", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@1" }
-        ,{ "command": "gitTree.rebaseSkip", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@2" }
-        ,{ "command": "gitTree.rebaseAbort", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@3" }
+        ,{ "command": "gitTree.rebaseContinue", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.rebaseInProgress", "group": "3_rebase@1" }
+        ,{ "command": "gitTree.rebaseSkip", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.rebaseInProgress", "group": "3_rebase@2" }
+        ,{ "command": "gitTree.rebaseAbort", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.rebaseInProgress", "group": "3_rebase@3" }
+        ,{ "command": "gitTree.mergeAbort", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.mergeInProgress", "group": "3_merge@1" }
         ,{ "command": "gitTree.addWorktree", "when": "view == gitTree.worktrees", "group": "navigation@1" }
         ,{ "command": "gitTree.pruneWorktrees", "when": "view == gitTree.worktrees", "group": "navigation@2" }
         ,{ "command": "gitTree.syncSubmodules", "when": "view == gitTree.submodules", "group": "navigation@2" }

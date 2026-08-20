@@ -164,10 +164,11 @@ class StashesProvider extends BaseProvider {
     if (!git || element) return [];
     const stashes = await git.getStashes();
     return stashes.map((s) => {
-      const item = new vscode.TreeItem(s.message || s.ref);
+      const label = s.message ? s.message : s.ref;
+      const item = new vscode.TreeItem(label);
       item.id = 'stash:' + s.ref;
       item.contextValue = 'gitTree.stash';
-      item.description = `${s.ref} · ${timeAgo(s.time)}`;
+      item.description = s.message ? `${s.ref} · ${timeAgo(s.time)}` : timeAgo(s.time);
       item.iconPath = new vscode.ThemeIcon('archive');
       item.stash = s;
       return item;
@@ -223,8 +224,8 @@ class ChangesProvider extends BaseProvider {
     if (!git) return [];
     if (!element) {
       const status = await this.updateStatus();
-      const staged = status.files.filter((f) => f.x !== ' ' && f.x !== '?');
-      const working = status.files.filter((f) => f.y !== ' ' || f.x === '?');
+      const staged = status.files.filter((f) => f.x !== ' ' && f.x !== '?' && !['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.x + f.y));
+      const working = status.files.filter((f) => f.y !== ' ' || f.x === '?' || ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.x + f.y));
       return [
         changeGroup('Staged Changes', 'staged', staged, true),
         changeGroup('Unstaged Changes', 'working', sortChanges(working, this.sortBy), false)
@@ -259,7 +260,8 @@ function changeLevel(files, staged, prefix, viewMode, git) {
 }
 
 function changeItem(file, staged, git) {
-      const status = staged ? file.x : (file.x === '?' ? 'U' : file.y);
+      const isConflicted = ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(file.x + file.y);
+      const status = isConflicted ? 'C' : (staged ? file.x : (file.x === '?' ? 'U' : file.y));
       const item = new vscode.TreeItem(vscode.Uri.file(require('path').join(git.root, file.path)));
       const name = require('path').basename(file.path);
       item.label = status === 'D' ? strike(name) : name;
@@ -301,7 +303,8 @@ class ChangeDecorations {
     this.statuses.clear();
     for (const file of files) {
       const uri = vscode.Uri.file(require('path').join(root, file.path));
-      const status = file.x === '?' ? 'U' : file.y !== ' ' ? file.y : file.x;
+      const isConflicted = ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(file.x + file.y);
+      const status = isConflicted ? 'C' : (file.x === '?' ? 'U' : file.y !== ' ' ? file.y : file.x);
       this.statuses.set(uri.toString(), status);
     }
     this._onDidChangeFileDecorations.fire(undefined);

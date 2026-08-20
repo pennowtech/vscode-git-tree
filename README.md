@@ -73,8 +73,9 @@ The graph renders commits and merge topology using colored SVG lanes. It include
 
 - Click a commit to select it and inspect its information.
 - Ctrl/Cmd-click another commit to compare the two revisions.
+- Right-click commits, branch labels, remote labels, or tags to select and compare refs explicitly; clear the selection from the same menu.
 - Right-click commits or reference labels for Git actions.
-- Use **Open Changes** to open all changed files in VS Code's native multi-file changes editor.
+- Use **Open Changes** from a commit, ref, or comparison to open all changed files in VS Code's native multi-file changes editor.
 - Click an individual changed file to open its native side-by-side diff.
 
 ### Commit actions

@@ -88,6 +88,8 @@ To review every file together:
 3. Right-click another branch or commit.
 4. Select **Compare with Selected**.
 
+Use **Clear Compare Selection** to start over. Tags and remote-branch labels can also be selected as comparison endpoints.
+
 ### Compare two refs from the Command Palette
 
 1. Run **Compare Two Refs…**.
@@ -99,6 +101,8 @@ To review every file together:
 Right-click a branch or commit. Select **Compare with Working Changes**.
 
 Graph colors identify the source and target rows.
+
+Select **Open Changes** on a commit, ref, or completed comparison to review every affected file together in VS Code's multi-file changes editor.
 
 ## 6. Work with local changes
 

@@ -356,6 +356,26 @@ class Git {
     return [merge, apply].some((p) => p && require('fs').existsSync(require('path').resolve(this.root, p)));
   }
 
+  async getConflictState() {
+    const gitPath = async (cmd) => (await this.exec(['rev-parse', '--git-path', cmd]).catch(() => '')).trim();
+    const [rebaseMerge, rebaseApply, mergeHead, cherryPickHead, revertHead] = await Promise.all([
+      gitPath('rebase-merge'),
+      gitPath('rebase-apply'),
+      gitPath('MERGE_HEAD'),
+      gitPath('CHERRY_PICK_HEAD'),
+      gitPath('REVERT_HEAD')
+    ]);
+    const fs = require('fs');
+    const path = require('path');
+    const checkExists = (p) => p && fs.existsSync(path.resolve(this.root, p));
+    return {
+      rebase: checkExists(rebaseMerge) || checkExists(rebaseApply),
+      merge: checkExists(mergeHead),
+      cherryPick: checkExists(cherryPickHead),
+      revert: checkExists(revertHead)
+    };
+  }
+
   async getStashes() {
     const out = await this.exec([
       'stash',
@@ -435,6 +455,9 @@ class Git {
   rebaseContinue() { return this.exec(['rebase', '--continue']); }
   rebaseSkip() { return this.exec(['rebase', '--skip']); }
   rebaseAbort() { return this.exec(['rebase', '--abort']); }
+  mergeAbort() { return this.exec(['merge', '--abort']); }
+  cherryPickAbort() { return this.exec(['cherry-pick', '--abort']); }
+  revertAbort() { return this.exec(['revert', '--abort']); }
   cherryPick(sha) { return this.exec(['cherry-pick', sha]); }
   revert(sha, isMerge) { return this.exec(['revert', '--no-edit', ...(isMerge ? ['-m', '1'] : []), sha]); }
   reset(sha, mode) { return this.exec(['reset', `--${mode}`, sha]); }
@@ -487,6 +510,59 @@ class Git {
   pruneWorktrees() { return this.exec(['worktree', 'prune']); }
   lockWorktree(worktreePath) { return this.exec(['worktree', 'lock', worktreePath]); }
   unlockWorktree(worktreePath) { return this.exec(['worktree', 'unlock', worktreePath]); }
+
+  async rewordCommit(sha, newMessage) {
+    const shaShort = sha.slice(0, 7);
+    const base64Msg = Buffer.from(newMessage, 'utf8').toString('base64');
+    
+    // Check if the commit is the current HEAD
+    const isHead = (await this.exec(['rev-parse', 'HEAD']).catch(() => '')).trim() === sha;
+    if (isHead) {
+      return this.exec(['commit', '--amend', '-m', newMessage]);
+    }
+    
+    // Determine rebase parent (if root commit, use --root)
+    let parent = sha + '^';
+    const isRoot = !(await this.exec(['rev-parse', '--verify', sha + '^']).then(() => true).catch(() => false));
+    if (isRoot) {
+      parent = '--root';
+    }
+    
+    // Write temporary helper script inside git directory
+    const fs = require('fs');
+    const path = require('path');
+    const gitDir = (await this.exec(['rev-parse', '--git-dir'])).trim();
+    const absGitDir = path.isAbsolute(gitDir) ? gitDir : path.resolve(this.root, gitDir);
+    const scriptPath = path.join(absGitDir, 'git-tree-reword.js');
+    
+    const scriptContent = `
+const fs = require('fs');
+const file = process.argv[process.argv.length - 1];
+if (file.endsWith('git-rebase-todo')) {
+  let content = fs.readFileSync(file, 'utf8');
+  content = content.replace(/^pick\\\\s+(${shaShort})/, 'reword $1');
+  fs.writeFileSync(file, content, 'utf8');
+} else {
+  fs.writeFileSync(file, Buffer.from('${base64Msg}', 'base64').toString('utf8'), 'utf8');
+}
+`;
+    fs.writeFileSync(scriptPath, scriptContent, 'utf8');
+    
+    try {
+      await this.exec([
+        '-c', `sequence.editor=node "${scriptPath}"`,
+        '-c', `core.editor=node "${scriptPath}"`,
+        'rebase', '-i', parent
+      ]);
+    } catch (err) {
+      // If rebase fails, abort it
+      await this.exec(['rebase', '--abort']).catch(() => {});
+      throw err;
+    } finally {
+      // Clean up the script file
+      try { fs.unlinkSync(scriptPath); } catch (e) {}
+    }
+  }
 }
 
 // -------------------------------------------------------------------- utils

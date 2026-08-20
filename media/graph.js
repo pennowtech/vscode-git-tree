@@ -600,6 +600,7 @@
           `</div>` +
         `</div>` +
         `<div class="d-actions" data-sha="${esc(d.sha)}" data-merge="${d.isMerge ? 1 : 0}">` +
+          `<button data-act="openChanges">▤ Open Changes</button>` +
           `<button data-act="checkoutDetached">⇥ Checkout</button>` +
           `<button data-act="createBranch">${svgIcon('git-branch')} Branch…</button>` +
           `<button data-act="createTag">${svgIcon('tag')} Tag…</button>` +
@@ -691,6 +692,7 @@
       `<div class="d-head">` +
         `<div class="cmp-title-row">` +
           `<span class="d-title">Comparing refs</span>` +
+          `<button id="cmpOpenChanges" title="Open all changed files">▤ Open Changes</button>` +
           `<button id="cmpClose" class="icon-btn" title="Back to commit details">×</button>` +
         `</div>` +
         `<div class="compare-refbar">` +
@@ -719,6 +721,8 @@
     if (target) target.onchange = runCompare;
     const close = el('cmpClose');
     if (close) close.onclick = () => { state.compareMark = null; selectEndpoint(r.a); };
+    const openChanges = el('cmpOpenChanges');
+    if (openChanges) openChanges.onclick = () => post({ type: 'openCompareChanges', a: r.a, b: r.b === 'Working Tree' ? 'WT' : r.b });
   }
 
   function selectEndpoint(endpoint) {
@@ -792,6 +796,12 @@
         post({ type: 'compare', a: other, b: sha });
         return;
       }
+      if (sha !== 'WT') {
+        state.compareMark = sha;
+        selectRow(sha);
+        renderGraph();
+        return;
+      }
     }
     if (chip) {
       selectRow(sha); // chips select the row too; right-click gives ref actions
@@ -811,10 +821,12 @@
     } else if (sha !== 'WT') {
       showCommitMenu(e.pageX, e.pageY, sha);
     } else {
-      showMenu(e.pageX, e.pageY, [
+      const items = [
         { label: 'Stash Changes…', run: () => post({ type: 'action', action: 'stashSave', args: {} }) },
         { label: 'View Changed Files', run: () => selectRow('WT') }
-      ]);
+      ];
+      if (state.compareMark) items.push('-', { label: `Compare with Selected (${shortSha(state.compareMark)})`, run: () => post({ type: 'compare', a: state.compareMark, b: 'WT' }) });
+      showMenu(e.pageX, e.pageY, items);
     }
   });
 
@@ -863,6 +875,8 @@
     const items = [
       { label: shortSha(sha) },
       { label: 'View Details', run: () => selectRow(sha) },
+      { label: 'Open Changes', run: () => post({ type: 'openCommitChanges', sha }) },
+      { label: 'Edit Commit Message…', run: act('rewordCommit', { sha }) },
       '-',
       { label: 'Checkout Commit (Detached)', run: act('checkoutDetached', { sha }) },
       { label: 'Create Branch Here…', run: act('createBranch', { startPoint: sha }) },
@@ -877,9 +891,11 @@
       { label: 'Reset Current Branch Here — hard', danger: true, run: act('reset', { sha, mode: 'hard' }) },
       '-',
       { label: 'Compare with Working Changes', run: () => post({ type: 'compare', a: sha, b: 'WT' }) },
-      state.compareMark && state.compareMark !== sha
-        ? { label: `Compare with ${shortSha(state.compareMark)}`, run: () => post({ type: 'compare', a: state.compareMark, b: sha }) }
-        : { label: 'Select for Compare', run: () => { state.compareMark = sha; renderGraph(); } },
+      { label: state.compareMark === sha ? 'Selected for Compare ✓' : 'Select for Compare', run: () => { state.compareMark = sha; renderGraph(); } },
+      ...(state.compareMark && state.compareMark !== sha
+        ? [{ label: `Compare with Selected (${shortSha(state.compareMark)})`, run: () => post({ type: 'compare', a: state.compareMark, b: sha }) }]
+        : []),
+      ...(state.compareMark ? [{ label: 'Clear Compare Selection', run: () => { state.compareMark = null; state.compare = null; renderGraph(); } }] : []),
       '-',
       { label: 'Copy SHA', run: () => post({ type: 'copy', text: sha }) },
       { label: 'Copy Message', run: () => post({ type: 'copy', text: subjectOf(sha) }) }
@@ -897,10 +913,13 @@
         { label: 'Rebase Current Branch onto This', run: act('rebase', { name }) },
         { label: 'Interactive Rebase onto This…', run: act('interactiveRebase', { name }) },
         '-',
+        { label: 'Open Changes', run: () => post({ type: 'openCompareChanges', a: state.defaultCompareRef, b: name }) },
         { label: 'Compare with Working Changes', run: () => post({ type: 'compare', a: name, b: 'WT' }) },
-        state.compareMark
-          ? { label: `Compare with ${shortSha(state.compareMark)}`, run: () => post({ type: 'compare', a: state.compareMark, b: name }) }
-          : { label: 'Select for Compare', run: () => { state.compareMark = sha; renderGraph(); } },
+        { label: state.compareMark === sha ? 'Selected for Compare ✓' : 'Select for Compare', run: () => { state.compareMark = sha; renderGraph(); } },
+        ...(state.compareMark && state.compareMark !== sha
+          ? [{ label: `Compare with Selected (${shortSha(state.compareMark)})`, run: () => post({ type: 'compare', a: state.compareMark, b: name }) }]
+          : []),
+        ...(state.compareMark ? [{ label: 'Clear Compare Selection', run: () => { state.compareMark = null; state.compare = null; renderGraph(); } }] : []),
         '-'
       ]);
       if (type === 'branch') {
@@ -910,7 +929,13 @@
     } else if (type === 'tag') {
       items = items.concat([
         { label: 'Checkout Tag (Detached)', run: act('checkoutDetached', { sha: name }) },
+        { label: 'Open Changes', run: () => post({ type: 'openCompareChanges', a: state.defaultCompareRef, b: name }) },
         { label: `Compare with ${state.head.branch || 'HEAD'}`, run: () => post({ type: 'compare', a: state.head.branch || 'HEAD', b: name }) },
+        { label: state.compareMark === sha ? 'Selected for Compare ✓' : 'Select for Compare', run: () => { state.compareMark = sha; renderGraph(); } },
+        ...(state.compareMark && state.compareMark !== sha
+          ? [{ label: `Compare with Selected (${shortSha(state.compareMark)})`, run: () => post({ type: 'compare', a: state.compareMark, b: name }) }]
+          : []),
+        ...(state.compareMark ? [{ label: 'Clear Compare Selection', run: () => { state.compareMark = null; state.compare = null; renderGraph(); } }] : []),
         '-',
         { label: 'Delete Tag…', danger: true, run: act('deleteTag', { name }) }
       ]);
@@ -952,6 +977,7 @@
       const sha = wrap ? wrap.dataset.sha : undefined;
       const isMerge = wrap ? wrap.dataset.merge === '1' : false;
       switch (btn.dataset.act) {
+        case 'openChanges': post({ type: 'openCommitChanges', sha }); break;
         case 'checkoutDetached': post({ type: 'action', action: 'checkoutDetached', args: { sha } }); break;
         case 'createBranch': post({ type: 'action', action: 'createBranch', args: { startPoint: sha } }); break;
         case 'createTag': post({ type: 'action', action: 'createTag', args: { sha } }); break;

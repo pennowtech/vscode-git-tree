@@ -7,6 +7,7 @@
 - Add one-click stage and unstage actions to folder rows in the Changes tree.
 - Reuse VS Code's discovered Git executable so Changes still load when `git` is not on the extension host PATH.
 - Show a confirmed Discard Changes button beside Stage on hover while retaining discard and .gitignore context-menu actions.
+- Restore and strengthen commit-graph comparison workflows with explicit select/compare/clear actions, Ctrl/Cmd selection, tag support, and multi-file Open Changes commands.
 
 ## 0.0.4
 

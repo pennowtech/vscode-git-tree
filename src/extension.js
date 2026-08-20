@@ -19,18 +19,27 @@ let gitWatcher;
 let workingTreeWatcher;
 let providers = {};
 let extensionContext;
+let commitProvider;
 
 async function activate(context) {
   extensionContext = context;
+  const getGit = () => git;
   await configureGitExecutable();
   await discoverRepo();
 
   // --- content provider that serves file contents at a git revision (for diffs)
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('gitTree.commitInput', new CommitViewProvider(async (message, mode) => {
-      await actions.run(git, 'commit', { message, amend: mode === 'amend', sign: mode === 'sign' });
-      refreshAll();
-    })),
+    (() => {
+      commitProvider = new CommitViewProvider(context.extension.packageJSON.version, getGit, async (message, mode) => {
+        if (['commit', 'amend', 'sign'].includes(mode)) {
+          await actions.run(git, 'commit', { message, amend: mode === 'amend', sign: mode === 'sign' });
+        } else {
+          await actions.run(git, mode, {});
+        }
+        refreshAll();
+      });
+      return vscode.window.registerWebviewViewProvider('gitTree.commitInput', commitProvider);
+    })(),
     vscode.workspace.registerTextDocumentContentProvider('gittree', {
       async provideTextDocumentContent(uri) {
         try {
@@ -46,7 +55,6 @@ async function activate(context) {
   );
 
   // --- sidebar tree views
-  const getGit = () => git;
   providers.branches = new BranchesProvider(getGit);
   providers.stashes = new StashesProvider(getGit);
   providers.tags = new TagsProvider(getGit);
@@ -268,6 +276,9 @@ async function activate(context) {
   register('gitTree.rebaseContinue', () => actions.run(git, 'rebaseContinue', {}));
   register('gitTree.rebaseSkip', () => actions.run(git, 'rebaseSkip', {}));
   register('gitTree.rebaseAbort', () => actions.run(git, 'rebaseAbort', {}));
+  register('gitTree.mergeAbort', () => actions.run(git, 'mergeAbort', {}));
+  register('gitTree.cherryPickAbort', () => actions.run(git, 'cherryPickAbort', {}));
+  register('gitTree.revertAbort', () => actions.run(git, 'revertAbort', {}));
   register('gitTree.openPullRequests', async () => {
     const remote = await git.getRemoteUrl();
     const url = providerPullRequestUrl(remote);
@@ -484,7 +495,17 @@ function refreshAll() {
   providers.pullRequests && providers.pullRequests.refresh();
   if (GraphPanel.current) GraphPanel.current.refresh();
   updateStatusBar();
-  if (git) git.isRebaseInProgress().then((active) => vscode.commands.executeCommand('setContext', 'gitTree.rebaseInProgress', active));
+  if (git) {
+    git.getConflictState().then((state) => {
+      vscode.commands.executeCommand('setContext', 'gitTree.rebaseInProgress', state.rebase);
+      vscode.commands.executeCommand('setContext', 'gitTree.mergeInProgress', state.merge);
+      vscode.commands.executeCommand('setContext', 'gitTree.cherryPickInProgress', state.cherryPick);
+      vscode.commands.executeCommand('setContext', 'gitTree.revertInProgress', state.revert);
+      if (commitProvider) {
+        commitProvider.updateState(state);
+      }
+    });
+  }
 }
 
 function shellQuote(value) {
@@ -704,6 +725,22 @@ async function openChangeFile(filePath, staged, file) {
   if (!file) {
     const status = await git.getStatus();
     file = status.files.find((candidate) => candidate.path === filePath) || { path: filePath, x: ' ', y: ' ' };
+  }
+  const isConflicted = ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(file.x + file.y);
+  if (isConflicted) {
+    const absolutePath = path.join(git.root, filePath);
+    if (fs.existsSync(absolutePath) && !fs.statSync(absolutePath).isDirectory()) {
+      const fileUri = vscode.Uri.file(absolutePath);
+      try {
+        await vscode.commands.executeCommand('git.openMergeEditor', fileUri);
+        return;
+      } catch (e) {
+        // Fallback to normal text document if git.openMergeEditor fails
+        const doc = await vscode.workspace.openTextDocument(fileUri);
+        await vscode.window.showTextDocument(doc, { preview: true });
+        return;
+      }
+    }
   }
   const revisionUri = (rev, empty = false) => vscode.Uri.from({
     scheme: 'gittree',
