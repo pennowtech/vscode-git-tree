@@ -105,9 +105,8 @@ class GraphPanel {
         case 'action':
           if (msg.action === 'interactiveRebase') {
             const ref = msg.args?.name || 'HEAD~5';
-            const terminal = vscode.window.createTerminal({ name: 'Interactive Rebase', cwd: this.git.root });
-            terminal.show();
-            terminal.sendText(`git rebase -i ${shellQuote(ref)}`);
+            const { RebasePanel } = require('./rebasePanel');
+            RebasePanel.show(this.git, ref);
             break;
           }
           await actions.run(this.git, msg.action, msg.args || {});

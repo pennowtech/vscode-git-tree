@@ -77,8 +77,19 @@ async function run(git, action, args) {
     case 'rebase': {
       const ok = await confirm(`Rebase the current branch onto '${args.name}'?`, 'Rebase');
       if (!ok) return;
-      await progress(`Rebasing onto ${args.name}`, () => git.rebase(args.name));
-      return info(`Rebased onto ${args.name}`);
+      try {
+        await progress(`Rebasing onto ${args.name}`, () => git.rebase(args.name));
+        return info(`Rebased onto ${args.name}`);
+      } catch (err) {
+        const inProgress = await git.isRebaseInProgress();
+        if (inProgress) {
+          const { RebasePanel } = require('./rebasePanel');
+          RebasePanel.show(git);
+          vscode.window.showWarningMessage('Rebase paused due to conflicts. Please resolve conflicts.');
+          return;
+        }
+        throw err;
+      }
     }
     case 'rebaseContinue':
       return progress('Continuing rebase', () => git.rebaseContinue());

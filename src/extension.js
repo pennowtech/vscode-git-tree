@@ -269,9 +269,12 @@ async function activate(context) {
   register('gitTree.interactiveRebase', async (item) => {
     const ref = item?.branch?.name || await vscode.window.showInputBox({ prompt: 'Interactive rebase onto ref', value: 'HEAD~5' });
     if (!ref) return;
-    const terminal = vscode.window.createTerminal({ name: 'GitTree Rebase', cwd: git.root });
-    terminal.show();
-    terminal.sendText(`git rebase -i ${shellQuote(ref)}`);
+    const { RebasePanel } = require('./rebasePanel');
+    RebasePanel.show(git, ref);
+  });
+  register('gitTree.showRebasePanel', () => {
+    const { RebasePanel } = require('./rebasePanel');
+    RebasePanel.show(git);
   });
   register('gitTree.rebaseContinue', () => actions.run(git, 'rebaseContinue', {}));
   register('gitTree.rebaseSkip', () => actions.run(git, 'rebaseSkip', {}));
@@ -494,6 +497,8 @@ function refreshAll() {
   providers.submodules && providers.submodules.refresh();
   providers.pullRequests && providers.pullRequests.refresh();
   if (GraphPanel.current) GraphPanel.current.refresh();
+  const { RebasePanel } = require('./rebasePanel');
+  if (RebasePanel.current) RebasePanel.current.refresh();
   updateStatusBar();
   if (git) {
     git.getConflictState().then((state) => {

@@ -452,7 +452,11 @@ class Git {
   renameBranch(oldName, newName) { return this.exec(['branch', '-m', oldName, newName]); }
   merge(ref) { return this.exec(['merge', ref]); }
   rebase(ref) { return this.exec(['rebase', ref]); }
-  rebaseContinue() { return this.exec(['rebase', '--continue']); }
+  rebaseContinue() {
+    return this.exec(['rebase', '--continue'], {
+      env: { ...process.env, GIT_EDITOR: 'true' }
+    });
+  }
   rebaseSkip() { return this.exec(['rebase', '--skip']); }
   rebaseAbort() { return this.exec(['rebase', '--abort']); }
   mergeAbort() { return this.exec(['merge', '--abort']); }
@@ -563,7 +567,210 @@ if (file.endsWith('git-rebase-todo')) {
       try { fs.unlinkSync(scriptPath); } catch (e) {}
     }
   }
+
+  async startInteractiveRebase(ref) {
+    const fs = require('fs');
+    const path = require('path');
+    const gitDir = (await this.exec(['rev-parse', '--git-dir'])).trim();
+    const absGitDir = path.isAbsolute(gitDir) ? gitDir : path.resolve(this.root, gitDir);
+    const scriptPath = path.join(absGitDir, 'git-tree-rebase-editor.js');
+    
+    const scriptContent = `
+const fs = require('fs');
+const file = process.argv[process.argv.length - 1];
+if (file.endsWith('git-rebase-todo')) {
+  const content = fs.readFileSync(file, 'utf8');
+  const lines = content.split('\\n');
+  const todo = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) continue;
+    const parts = line.split(/\\s+/);
+    const action = parts[0];
+    const sha = parts[1];
+    const subject = parts.slice(2).join(' ');
+    todo.push({ index: i, action, sha, subject });
+  }
+  const statePath = file + '.json';
+  fs.writeFileSync(statePath, JSON.stringify({
+    status: 'pending',
+    todo: todo,
+    originalFile: file
+  }), 'utf8');
+  let count = 0;
+  while (count < 6000) {
+    try {
+      if (!fs.existsSync(statePath)) {
+        process.exit(1);
+      }
+      const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      if (state.status === 'apply') {
+        const newLines = state.todo.map(item => \`\${item.action} \${item.sha} \${item.subject}\`);
+        fs.writeFileSync(file, newLines.join('\\n') + '\\n', 'utf8');
+        try { fs.unlinkSync(statePath); } catch(e) {}
+        process.exit(0);
+      } else if (state.status === 'abort') {
+        fs.writeFileSync(file, '', 'utf8');
+        try { fs.unlinkSync(statePath); } catch(e) {}
+        process.exit(1);
+      }
+    } catch (e) {}
+    const start = Date.now();
+    while (Date.now() - start < 100) {}
+    count++;
+  }
+  try { fs.unlinkSync(statePath); } catch(e) {}
+  process.exit(1);
+} else {
+  process.exit(0);
 }
+`;
+    fs.writeFileSync(scriptPath, scriptContent, 'utf8');
+    
+    try {
+      await this.exec([
+        '-c', `sequence.editor=node "${scriptPath}"`,
+        'rebase', '-i', ref
+      ]);
+    } finally {
+      try { fs.unlinkSync(scriptPath); } catch (e) {}
+    }
+  }
+
+  async getRebaseState() {
+    const gitPath = async (cmd) => (await this.exec(['rev-parse', '--git-path', cmd]).catch(() => '')).trim();
+    const [rebaseMergePath, rebaseApplyPath] = await Promise.all([
+      gitPath('rebase-merge'),
+      gitPath('rebase-apply')
+    ]);
+    const fs = require('fs');
+    const path = require('path');
+    const mergeDir = path.resolve(this.root, rebaseMergePath);
+    const applyDir = path.resolve(this.root, rebaseApplyPath);
+    
+    let dir = '';
+    if (rebaseMergePath && fs.existsSync(mergeDir)) {
+      dir = mergeDir;
+    } else if (rebaseApplyPath && fs.existsSync(applyDir)) {
+      dir = applyDir;
+    }
+    
+    if (!dir) return null;
+    
+    const read = (file) => {
+      try {
+        return fs.readFileSync(path.join(dir, file), 'utf8');
+      } catch (e) {
+        return '';
+      }
+    };
+    
+    const headName = read('head-name').trim();
+    const onto = read('onto').trim();
+    const stoppedSha = read('stopped-sha').trim();
+    
+    const parseTodo = (content, status) => {
+      return content.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'))
+        .map((line, idx) => {
+          const parts = line.split(/\s+/);
+          const action = parts[0];
+          const sha = parts[1];
+          const subject = parts.slice(2).join(' ');
+          return { action, sha, subject, status, index: idx };
+        });
+    };
+    
+    const done = parseTodo(read('done'), 'done');
+    const todo = parseTodo(read('git-rebase-todo'), 'todo');
+    
+    let ontoSubject = '';
+    if (onto) {
+      ontoSubject = (await this.exec(['show', '-s', '--format=%s', onto]).catch(() => '')).trim();
+    }
+    
+    let stoppedCommit = null;
+    if (stoppedSha) {
+      const lastDone = done[done.length - 1];
+      if (lastDone && (lastDone.sha === stoppedSha || lastDone.sha.startsWith(stoppedSha) || stoppedSha.startsWith(lastDone.sha))) {
+        lastDone.status = 'current';
+      } else {
+        const subject = (await this.exec(['show', '-s', '--format=%s', stoppedSha]).catch(() => '')).trim();
+        stoppedCommit = { action: 'pick', sha: stoppedSha, subject, status: 'current' };
+      }
+    }
+    
+    const commits = [...done];
+    if (stoppedCommit) {
+      commits.push(stoppedCommit);
+    }
+    commits.push(...todo);
+    
+    for (let c of commits) {
+      if (c.sha) {
+        const info = (await this.exec(['show', '-s', '--format=%at|%an', c.sha]).catch(() => '')).trim();
+        if (info) {
+          const [at, an] = info.split('|');
+          c.time = Number(at) * 1000;
+          c.author = an;
+        }
+      }
+    }
+    
+    return {
+      branch: headName.replace('refs/heads/', '') || 'HEAD',
+      onto: onto.slice(0, 7),
+      ontoSubject,
+      stoppedSha: stoppedSha.slice(0, 7),
+      commits
+    };
+  }
+
+  async getConflictedFiles() {
+    const status = await this.getStatus();
+    const conflicted = [];
+    const path = require('path');
+    for (const f of status.files) {
+      const isConflicted = 
+        f.x === 'U' || 
+        f.y === 'U' || 
+        (f.x === 'A' && f.y === 'A') || 
+        (f.x === 'D' && f.y === 'D');
+      if (isConflicted) {
+        let desc = 'Conflict';
+        if (f.x === 'A' && f.y === 'A') desc = 'Added (Both)';
+        else if (f.x === 'D' && f.y === 'D') desc = 'Deleted (Both)';
+        else if (f.x === 'U' && f.y === 'U') desc = 'Modified (Both)';
+        else if (f.x === 'U' && f.y === 'D') desc = 'Deleted (Them)';
+        else if (f.x === 'D' && f.y === 'U') desc = 'Deleted (Us)';
+        else if (f.x === 'A' && f.y === 'U') desc = 'Added (Them)';
+        else if (f.x === 'U' && f.y === 'A') desc = 'Added (Us)';
+        
+        let markers = 0;
+        try {
+          const fs = require('fs');
+          const absPath = path.resolve(this.root, f.path);
+          if (fs.existsSync(absPath)) {
+            const content = fs.readFileSync(absPath, 'utf8');
+            const match = content.match(/^<<<<<<< /gm);
+            if (match) markers = match.length;
+          }
+        } catch (e) {}
+
+        conflicted.push({
+          path: f.path,
+          origPath: f.origPath,
+          status: f.x + f.y,
+          description: desc,
+          conflictCount: markers
+        });
+      }
+    }
+    return conflicted;
+  }
+}
+
 
 // -------------------------------------------------------------------- utils
 
