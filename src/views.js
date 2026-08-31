@@ -161,18 +161,46 @@ function escapeMarkdown(value) {
 class StashesProvider extends BaseProvider {
   async getChildren(element) {
     const git = this.getGit();
-    if (!git || element) return [];
-    const stashes = await git.getStashes();
-    return stashes.map((s) => {
-      const label = s.message ? s.message : s.ref;
-      const item = new vscode.TreeItem(label);
-      item.id = 'stash:' + s.ref;
-      item.contextValue = 'gitTree.stash';
-      item.description = s.message ? `${s.ref} · ${timeAgo(s.time)}` : timeAgo(s.time);
-      item.iconPath = new vscode.ThemeIcon('archive');
-      item.stash = s;
-      return item;
-    });
+    if (!git) return [];
+    if (!element) {
+      const stashes = await git.getStashes();
+      return stashes.map((s) => {
+        const label = s.message ? s.message : s.ref;
+        const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
+        item.id = 'stash:' + s.ref;
+        item.contextValue = 'gitTree.stash';
+        item.description = s.message ? `${s.ref} · ${timeAgo(s.time)}` : timeAgo(s.time);
+        item.iconPath = new vscode.ThemeIcon('archive');
+        item.stash = s;
+        return item;
+      });
+    }
+    if (element.contextValue === 'gitTree.stash') {
+      const files = await git.getStashFiles(element.stash.ref);
+      return files.map((file) => {
+        const item = new vscode.TreeItem(vscode.Uri.file(require('path').join(git.root, file.path)));
+        const name = require('path').basename(file.path);
+        const status = file.status;
+        item.label = status === 'D' ? strike(name) : name;
+        const dir = require('path').dirname(file.path);
+        item.description = dir === '.' ? '' : dir;
+        item.tooltip = new vscode.MarkdownString([
+          `**${statusName(status)}**`,
+          '',
+          `\`${file.path}\``
+        ].join('\n'));
+        item.contextValue = 'gitTree.stashFile';
+        item.file = file;
+        item.stashRef = element.stash.ref;
+        item.command = {
+          command: 'gitTree.openStashChange',
+          title: 'Open Stash Changes',
+          arguments: [item]
+        };
+        return item;
+      });
+    }
+    return [];
   }
 }
 

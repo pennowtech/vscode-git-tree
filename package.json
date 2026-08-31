@@ -154,6 +154,8 @@
       ,{ "command": "gitTree.changesSortStatus", "title": "Sort by Status" }
       ,{ "command": "gitTree.stashAdvanced", "title": "Stash Options…", "icon": "$(archive)" }
       ,{ "command": "gitTree.stashView", "title": "View Stash", "icon": "$(preview)" }
+      ,{ "command": "gitTree.discardFolder", "title": "Discard Changes…", "icon": "$(discard)" }
+      ,{ "command": "gitTree.openStashChange", "title": "Open Stash Changes" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -230,10 +232,12 @@
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "inline@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "1_actions@1" },
         { "command": "gitTree.stageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "inline@1" },
+        { "command": "gitTree.discardFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "inline@2" },
         { "command": "gitTree.stageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "1_actions@1" },
         { "command": "gitTree.unstageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderStaged", "group": "inline@1" },
         { "command": "gitTree.unstageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderStaged", "group": "1_actions@1" },
         { "command": "gitTree.discardChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "2_danger@1" },
+        { "command": "gitTree.discardFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "2_danger@1" },
         { "command": "gitTree.openChangeFile", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged)/", "group": "3_file@1" },
         { "command": "gitTree.revealChangeInExplorer", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "3_file@2" },
         { "command": "gitTree.copyChangePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@1" },

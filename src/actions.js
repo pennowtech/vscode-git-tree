@@ -205,6 +205,15 @@ async function run(git, action, args) {
       await git.discard(args.path, args.untracked);
       return info(`Discarded changes in ${args.path}`);
     }
+    case 'discardFolder': {
+      const ok = await confirm(
+        `Discard all changes in folder '${args.path}'? This cannot be undone.`,
+        'Discard Changes'
+      );
+      if (!ok) return;
+      await git.discardFolder(args.path);
+      return info(`Discarded changes in folder ${args.path}`);
+    }
     case 'commit': {
       let message = typeof args.message === 'string' ? args.message.trim() : '';
       if (!message && !args.amend) {

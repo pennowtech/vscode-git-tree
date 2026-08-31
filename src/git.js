@@ -391,6 +391,27 @@ class Git {
       });
   }
 
+  async getStashFiles(ref) {
+    const trackedOut = await this.exec(['stash', 'show', '--name-status', ref]).catch(() => '');
+    const untrackedOut = await this.exec(['show', '--name-status', '--format=', `${ref}^3`]).catch(() => '');
+    const files = [];
+    const parse = (out, isUntracked = false) => {
+      for (const line of out.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const parts = trimmed.split('\t');
+        if (parts.length >= 2) {
+          const status = isUntracked ? 'U' : parts[0];
+          const filePath = parts[1];
+          files.push({ status, path: filePath });
+        }
+      }
+    };
+    parse(trackedOut, false);
+    parse(untrackedOut, true);
+    return files;
+  }
+
   async getTags() {
     const fmt = ['%(refname:short)', '%(objectname:short)', '%(creatordate:unix)', '%(subject)'].join(SEP);
     const out = await this.exec([
@@ -500,6 +521,10 @@ class Git {
     return untracked
       ? this.exec(['clean', '-f', '--', filePath])
       : this.exec(['restore', '--worktree', '--', filePath]);
+  }
+  async discardFolder(folderPath) {
+    await this.exec(['restore', '--worktree', '--', folderPath]).catch(() => {});
+    await this.exec(['clean', '-f', '-d', '--', folderPath]).catch(() => {});
   }
   commit(message, opts = {}) {
     if (opts.amend && !message) {

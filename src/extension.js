@@ -412,8 +412,14 @@ async function activate(context) {
     path: item.file.path,
     untracked: item.file.x === '?'
   }));
+  register('gitTree.discardFolder', (item) => actions.run(git, 'discardFolder', {
+    path: item.changePrefix.join('/')
+  }));
   register('gitTree.openChange', async (item) => {
     await openChangeFile(item.file.path, item.staged, item.file);
+  });
+  register('gitTree.openStashChange', async (item) => {
+    await openStashChange(item);
   });
   register('gitTree.openChangeFile', async (item) => openChangeAsFile(item));
   register('gitTree.revealChangeInExplorer', async (item) => revealChangeInExplorer(item));
@@ -724,6 +730,30 @@ function setupWorkingTreeWatcher(context) {
 async function pickableRefs() {
   const [branches, tags] = await Promise.all([git.getBranches(), git.getTags()]);
   return [...branches.map((b) => b.name), ...tags.map((t) => t.name)];
+}
+
+async function openStashChange(item) {
+  const file = item.file;
+  const stashRef = item.stashRef;
+  const filePath = file.path;
+  const isUntracked = file.status === 'U';
+
+  const revisionUri = (rev, empty = false) => vscode.Uri.from({
+    scheme: 'gittree',
+    path: '/' + filePath.replace(/\\/g, '/'),
+    query: JSON.stringify({ repo: git.root, rev, path: filePath, empty })
+  });
+
+  let left, right;
+  if (isUntracked) {
+    left = revisionUri(`${stashRef}^3`, true);
+    right = revisionUri(`${stashRef}^3`);
+  } else {
+    left = revisionUri(`${stashRef}^`);
+    right = revisionUri(stashRef);
+  }
+
+  await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(filePath)} (Stash: ${stashRef})`);
 }
 
 async function openChangeFile(filePath, staged, file) {
