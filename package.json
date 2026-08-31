@@ -2,7 +2,7 @@
   "name": "git-tree",
   "displayName": "GitTree",
   "description": "A GitLens-style commit graph with colorful branch lanes, rich commit/branch details, diffs, compare, inline blame, and full branch/stash/tag management.",
-  "version": "0.0.5",
+  "version": "0.1.1",
   "publisher": "pennowtech",
   "author": {
     "name": "Sukhdeep Singh"
@@ -124,6 +124,7 @@
       ,{ "command": "gitTree.rebaseContinue", "title": "Continue Rebase", "icon": "$(debug-continue)" }
       ,{ "command": "gitTree.rebaseSkip", "title": "Skip Rebase Commit", "icon": "$(debug-step-over)" }
       ,{ "command": "gitTree.rebaseAbort", "title": "Abort Rebase", "icon": "$(debug-stop)" }
+      ,{ "command": "gitTree.mergeAbort", "title": "Abort Merge", "icon": "$(debug-stop)" }
       ,{ "command": "gitTree.toggleBlameHeatmap", "title": "Toggle Full-file Blame Heatmap" }
       ,{ "command": "gitTree.updateSubmodules", "title": "Update/Initialize Submodules", "icon": "$(sync)" }
       ,{ "command": "gitTree.openPullRequests", "title": "Open Pull Requests", "icon": "$(git-pull-request)" }
@@ -153,6 +154,8 @@
       ,{ "command": "gitTree.changesSortStatus", "title": "Sort by Status" }
       ,{ "command": "gitTree.stashAdvanced", "title": "Stash Options…", "icon": "$(archive)" }
       ,{ "command": "gitTree.stashView", "title": "View Stash", "icon": "$(preview)" }
+      ,{ "command": "gitTree.discardFolder", "title": "Discard Changes…", "icon": "$(discard)" }
+      ,{ "command": "gitTree.openStashChange", "title": "Open Stash Changes" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -210,9 +213,10 @@
         { "command": "gitTree.refresh", "when": "view == gitTree.tags", "group": "navigation@2" }
         ,{ "command": "gitTree.updateSubmodules", "when": "view == gitTree.submodules", "group": "navigation@1" }
         ,{ "command": "gitTree.openPullRequests", "when": "view == gitTree.branches", "group": "2_actions@2" }
-        ,{ "command": "gitTree.rebaseContinue", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@1" }
-        ,{ "command": "gitTree.rebaseSkip", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@2" }
-        ,{ "command": "gitTree.rebaseAbort", "when": "view == gitTree.branches && gitTree.rebaseInProgress", "group": "3_rebase@3" }
+        ,{ "command": "gitTree.rebaseContinue", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.rebaseInProgress", "group": "3_rebase@1" }
+        ,{ "command": "gitTree.rebaseSkip", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.rebaseInProgress", "group": "3_rebase@2" }
+        ,{ "command": "gitTree.rebaseAbort", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.rebaseInProgress", "group": "3_rebase@3" }
+        ,{ "command": "gitTree.mergeAbort", "when": "(view == gitTree.branches || view == gitTree.changes) && gitTree.mergeInProgress", "group": "3_merge@1" }
         ,{ "command": "gitTree.addWorktree", "when": "view == gitTree.worktrees", "group": "navigation@1" }
         ,{ "command": "gitTree.pruneWorktrees", "when": "view == gitTree.worktrees", "group": "navigation@2" }
         ,{ "command": "gitTree.syncSubmodules", "when": "view == gitTree.submodules", "group": "navigation@2" }
@@ -228,10 +232,12 @@
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "inline@1" },
         { "command": "gitTree.unstageChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeStaged/", "group": "1_actions@1" },
         { "command": "gitTree.stageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "inline@1" },
+        { "command": "gitTree.discardFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "inline@2" },
         { "command": "gitTree.stageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "1_actions@1" },
         { "command": "gitTree.unstageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderStaged", "group": "inline@1" },
         { "command": "gitTree.unstageFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderStaged", "group": "1_actions@1" },
         { "command": "gitTree.discardChange", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.changeWorking/", "group": "2_danger@1" },
+        { "command": "gitTree.discardFolder", "when": "view == gitTree.changes && viewItem == gitTree.changeFolderWorking", "group": "2_danger@1" },
         { "command": "gitTree.openChangeFile", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged)/", "group": "3_file@1" },
         { "command": "gitTree.revealChangeInExplorer", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "3_file@2" },
         { "command": "gitTree.copyChangePath", "when": "view == gitTree.changes && viewItem =~ /gitTree\\.change(Working|Staged|Folder)/", "group": "4_copy@1" },

@@ -77,8 +77,19 @@ async function run(git, action, args) {
     case 'rebase': {
       const ok = await confirm(`Rebase the current branch onto '${args.name}'?`, 'Rebase');
       if (!ok) return;
-      await progress(`Rebasing onto ${args.name}`, () => git.rebase(args.name));
-      return info(`Rebased onto ${args.name}`);
+      try {
+        await progress(`Rebasing onto ${args.name}`, () => git.rebase(args.name));
+        return info(`Rebased onto ${args.name}`);
+      } catch (err) {
+        const inProgress = await git.isRebaseInProgress();
+        if (inProgress) {
+          const { RebasePanel } = require('./rebasePanel');
+          RebasePanel.show(git);
+          vscode.window.showWarningMessage('Rebase paused due to conflicts. Please resolve conflicts.');
+          return;
+        }
+        throw err;
+      }
     }
     case 'rebaseContinue':
       return progress('Continuing rebase', () => git.rebaseContinue());
@@ -90,6 +101,21 @@ async function run(git, action, args) {
     case 'rebaseAbort': {
       const ok = await confirm('Abort the active rebase and restore the original branch?', 'Abort Rebase');
       if (ok) return progress('Aborting rebase', () => git.rebaseAbort());
+      return;
+    }
+    case 'mergeAbort': {
+      const ok = await confirm('Abort the active merge and discard changes?', 'Abort Merge');
+      if (ok) return progress('Aborting merge', () => git.mergeAbort());
+      return;
+    }
+    case 'cherryPickAbort': {
+      const ok = await confirm('Abort the active cherry-pick and discard changes?', 'Abort Cherry-pick');
+      if (ok) return progress('Aborting cherry-pick', () => git.cherryPickAbort());
+      return;
+    }
+    case 'revertAbort': {
+      const ok = await confirm('Abort the active revert and discard changes?', 'Abort Revert');
+      if (ok) return progress('Aborting revert', () => git.revertAbort());
       return;
     }
     case 'cherryPick': {
@@ -179,6 +205,15 @@ async function run(git, action, args) {
       await git.discard(args.path, args.untracked);
       return info(`Discarded changes in ${args.path}`);
     }
+    case 'discardFolder': {
+      const ok = await confirm(
+        `Discard all changes in folder '${args.path}'? This cannot be undone.`,
+        'Discard Changes'
+      );
+      if (!ok) return;
+      await git.discardFolder(args.path);
+      return info(`Discarded changes in folder ${args.path}`);
+    }
     case 'commit': {
       let message = typeof args.message === 'string' ? args.message.trim() : '';
       if (!message && !args.amend) {
@@ -209,6 +244,21 @@ async function run(git, action, args) {
       return git.lockWorktree(args.path);
     case 'unlockWorktree':
       return git.unlockWorktree(args.path);
+    case 'rewordCommit': {
+      const details = await git.getCommitDetails(args.sha).catch(() => null);
+      const currentMessage = details ? details.body : '';
+      const newMessage = await vscode.window.showInputBox({
+        prompt: `Reword commit ${short(args.sha)}`,
+        value: currentMessage,
+        placeHolder: 'Enter new commit message',
+        validateInput: (value) => value.trim() ? undefined : 'Commit message is required'
+      });
+      if (newMessage === undefined || newMessage.trim() === currentMessage.trim()) return;
+      await progress(`Rewording commit ${short(args.sha)}`, () =>
+        git.rewordCommit(args.sha, newMessage.trim())
+      );
+      return info('Commit message updated');
+    }
     default:
       throw new Error(`Unknown action: ${action}`);
   }

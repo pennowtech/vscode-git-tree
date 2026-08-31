@@ -74,6 +74,12 @@ class GraphPanel {
         case 'compare':
           await this.sendCompare(msg.a, msg.b);
           break;
+        case 'openCommitChanges':
+          await this.openCommitChanges(msg.sha);
+          break;
+        case 'openCompareChanges':
+          await this.openCompareChanges(msg.a, msg.b);
+          break;
         case 'openFileDiff':
           await this.openFileDiff(msg);
           break;
@@ -99,9 +105,8 @@ class GraphPanel {
         case 'action':
           if (msg.action === 'interactiveRebase') {
             const ref = msg.args?.name || 'HEAD~5';
-            const terminal = vscode.window.createTerminal({ name: 'Interactive Rebase', cwd: this.git.root });
-            terminal.show();
-            terminal.sendText(`git rebase -i ${shellQuote(ref)}`);
+            const { RebasePanel } = require('./rebasePanel');
+            RebasePanel.show(this.git, ref);
             break;
           }
           await actions.run(this.git, msg.action, msg.args || {});
@@ -198,6 +203,39 @@ class GraphPanel {
       ? await this.git.getCompareWorking(a)
       : await this.git.getCompare(a, b);
     this.post({ type: 'compareResult', result });
+  }
+
+  async openCommitChanges(sha) {
+    const details = await this.git.getCommitDetails(sha);
+    const base = details.parents[0] || null;
+    await this.openChangesEditor(details.subject || short(sha), base, sha, details.files, false);
+  }
+
+  async openCompareChanges(a, b) {
+    const workingTree = b === 'WT' || b === 'Working Tree';
+    if (!workingTree && a === b) a = `${b}^`;
+    const result = workingTree ? await this.git.getCompareWorking(a) : await this.git.getCompare(a, b);
+    await this.openChangesEditor(`${a} ↔ ${workingTree ? 'Working Tree' : b}`, a, b, result.files, workingTree);
+  }
+
+  async openChangesEditor(label, base, target, files, workingTree) {
+    const resources = files.map((file) => {
+      const display = vscode.Uri.file(path.join(this.git.root, file.path));
+      const left = file.status === 'A' || file.status === 'U' || !base
+        ? emptyUri(this.git.root, file.path)
+        : gitUri(this.git.root, base, file.origPath || file.path);
+      const right = file.status === 'D'
+        ? emptyUri(this.git.root, file.path)
+        : workingTree
+          ? vscode.Uri.file(path.join(this.git.root, file.path))
+          : gitUri(this.git.root, target, file.path);
+      return [display, left, right];
+    });
+    if (!resources.length) {
+      vscode.window.showInformationMessage(`No changes found for ${label}.`);
+      return;
+    }
+    await vscode.commands.executeCommand('vscode.changes', `Changes: ${label}`, resources);
   }
 
   /** Open a VS Code diff editor for one file of a commit / compare / working tree. */
